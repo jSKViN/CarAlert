@@ -131,12 +131,22 @@ if ($conn2) DatabaseHelper::closeConnection(2);
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-100 min-h-screen">
-    <div class="container mx-auto px-4 py-8 max-w-4xl">
-        <div class="mb-6">
-            <h1 class="text-2xl font-bold text-gray-800">
-                <i class="fa fa-bell text-yellow-500 mr-2"></i>关注车牌管理
+    <header class="bg-blue-600 text-white shadow-md">
+        <div class="container mx-auto px-4 py-3 flex justify-between items-center">
+            <h1 class="text-xl font-bold">
+                <i class="fa fa-bell mr-2"></i>关注车牌管理
             </h1>
-            <p class="text-gray-500 mt-1">当关注的车牌被抓拍时，将自动发送微信通知（同步到两个数据库）</p>
+            <div class="flex items-center space-x-4">
+                <a href="index.php" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded-md text-sm">
+                    <i class="fa fa-home mr-1"></i>返回首页
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-6 max-w-4xl">
+        <div class="mb-6">
+            <p class="text-gray-600">当关注的车牌被抓拍时，将自动发送微信通知（同步到两个数据库）</p>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -259,6 +269,6 @@ if ($conn2) DatabaseHelper::closeConnection(2);
                 <i class="fa fa-arrow-left mr-1"></i>返回首页
             </a>
         </div>
-    </div>
+    </main>
 </body>
 </html>

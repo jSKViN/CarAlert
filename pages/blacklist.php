@@ -34,7 +34,6 @@ DatabaseHelper::closeConnection(1);
     <title>拉黑车牌管理 - CarAlert</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <style>
         .modal { display: none; }
         .modal.active { display: flex; }
