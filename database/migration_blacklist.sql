@@ -60,9 +60,23 @@ INSERT INTO p_update_flag (id, last_record_id, notify_count)
 VALUES (1, 0, 0)
 ON DUPLICATE KEY UPDATE id = id;
 
--- 初始化拉黑车牌操作日志表（记录当前已存在的拉黑记录）
--- 使用 INSERT IGNORE 避免主键冲突时的歧义问题
-INSERT IGNORE INTO p_blacklist_log (plate_number, action_type, reason, operator)
+-- 创建关注车牌操作日志表
+CREATE TABLE IF NOT EXISTS p_watch_log (
+    id INT AUTO_INCREMENT PRIMARY KEY COMMENT '自增ID',
+    plate_number VARCHAR(20) NOT NULL COMMENT '车牌号',
+    action_type VARCHAR(20) NOT NULL COMMENT '操作类型：ADD-添加，ENABLE-启用，DISABLE-禁用，DELETE-删除',
+    reason VARCHAR(500) DEFAULT '' COMMENT '原因/备注',
+    operator VARCHAR(50) DEFAULT '' COMMENT '操作人',
+    old_data JSON DEFAULT NULL COMMENT '操作前的数据',
+    new_data JSON DEFAULT NULL COMMENT '操作后的数据',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间',
+    KEY idx_plate_number (plate_number),
+    KEY idx_action_type (action_type),
+    KEY idx_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='关注车牌操作日志';
+
+-- 初始化关注车牌操作日志（记录当前已存在的关注记录）
+INSERT IGNORE INTO p_watch_log (plate_number, action_type, reason, operator)
 SELECT plate_number, 'ADD', remark, 'system'
 FROM p_watch_plates
 WHERE is_active = 1;
