@@ -26,6 +26,18 @@ function writeLog($message) {
     global $logFile;
     $time = date('Y-m-d H:i:s');
     $log = "[{$time}] {$message}\n";
+    
+    // 确保日志以 UTF-8 编码写入
+    if (!file_exists($logFile)) {
+        // 新文件写入 UTF-8 BOM 头
+        $bom = chr(239) . chr(187) . chr(191);
+        file_put_contents($logFile, $bom);
+    }
+    
+    if (function_exists('mb_convert_encoding')) {
+        $log = mb_convert_encoding($log, 'UTF-8', mb_detect_encoding($log));
+    }
+    
     file_put_contents($logFile, $log, FILE_APPEND | LOCK_EX);
     echo $log;
 }
@@ -372,8 +384,19 @@ $useDb2 = isset($options['2']);
 
 // 检查是否已经在运行
 if (file_exists($pidFile)) {
-    $pid = file_get_contents($pidFile);
-    if (posix_kill($pid, 0)) {
+    $pid = trim(file_get_contents($pidFile));
+    $isRunning = false;
+    
+    if (strtoupper(substr(PHP_OS, 0, 3)) === 'WIN') {
+        // Windows: 使用 tasklist 检查进程
+        exec("tasklist /FI \"PID eq {$pid}\"", $output, $returnCode);
+        $isRunning = ($returnCode === 0) && (count($output) > 1);
+    } else {
+        // Linux/Unix: 使用 posix_kill
+        $isRunning = function_exists('posix_kill') && posix_kill($pid, 0);
+    }
+    
+    if ($isRunning) {
         writeLog("守护进程已经在运行 (PID: {$pid})");
         exit(0);
     } else {
