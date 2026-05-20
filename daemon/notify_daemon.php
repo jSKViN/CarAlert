@@ -276,6 +276,17 @@ function mainLoop($useDb2 = false) {
     $blacklistPlates = getBlacklistPlates($conn);
     writeLog("关注车牌数: " . count($watchPlates) . ", 拉黑车牌数: " . count($blacklistPlates));
     
+    // 显示当前配置的通知环境
+    $enabledEnvs = [];
+    if (defined('NOTIFY_WECHAT_WORK_WEBHOOK') && NOTIFY_WECHAT_WORK_WEBHOOK) {
+        $enabledEnvs[] = '测试环境';
+    }
+    if (defined('NOTIFY_WECHAT_WORK_WEBHOOK_PROD') && NOTIFY_WECHAT_WORK_WEBHOOK_PROD) {
+        $enabledEnvs[] = '正式环境';
+    }
+    $envStr = empty($enabledEnvs) ? '无' : implode('、', $enabledEnvs);
+    writeLog("通知目标：{$envStr}");
+    
     while (true) {
         // 检查是否需要退出
         if (!file_exists($pidFile) || file_get_contents($pidFile) != getmypid()) {
@@ -307,12 +318,28 @@ function mainLoop($useDb2 = false) {
                 // 检查是否是拉黑车牌（优先处理）
                 if (isset($blacklistPlates[$parsedRecord['licensePlate']])) {
                     writeLog("拉黑车牌预警触发: {$parsedRecord['licensePlate']}");
-                    
+
                     $blacklistInfo = $blacklistPlates[$parsedRecord['licensePlate']];
-                    $notifySuccess = sendBlacklistAlert($parsedRecord, $blacklistInfo);
-                    
-                    if ($notifySuccess) {
+                    $notifyResult = sendBlacklistAlert($parsedRecord, $blacklistInfo);
+                    $notifySuccess = false;
+
+                    if (isset($notifyResult['success']) && $notifyResult['success']) {
+                        $notifySuccess = true;
+                        if (isset($notifyResult['details'])) {
+                            foreach ($notifyResult['details'] as $env => $r) {
+                                if ($r['success']) {
+                                    writeLog("企业微信[{$env}]拉黑预警已发送: {$parsedRecord['licensePlate']}");
+                                } else {
+                                    writeLog("企业微信[{$env}]拉黑预警发送失败: " . ($r['error'] ?? '未知错误'));
+                                }
+                            }
+                        } else {
+                            writeLog("企业微信拉黑预警已发送: {$parsedRecord['licensePlate']}");
+                        }
                         incrementNotifyCount($conn);
+                    } else {
+                        $errorMsg = $notifyResult['error'] ?? '未知错误';
+                        writeLog("企业微信拉黑预警发送失败: " . $errorMsg);
                     }
                 }
                 
@@ -352,9 +379,19 @@ function mainLoop($useDb2 = false) {
                     // 发送企业微信 Webhook 通知
                     if (NOTIFY_WECHAT_WORK_WEBHOOK) {
                         $result = sendWeChatWorkWebhookVehicleNotification($parsedRecord);
-                        if ($result['success']) {
-                            writeLog("企业微信通知已发送: {$parsedRecord['licensePlate']}");
+                        if (isset($result['success']) && $result['success']) {
                             $notifySuccess = true;
+                            if (isset($result['details'])) {
+                                foreach ($result['details'] as $env => $r) {
+                                    if ($r['success']) {
+                                        writeLog("企业微信[{$env}]通知已发送: {$parsedRecord['licensePlate']}");
+                                    } else {
+                                        writeLog("企业微信[{$env}]通知发送失败: " . ($r['error'] ?? '未知错误'));
+                                    }
+                                }
+                            } else {
+                                writeLog("企业微信通知已发送: {$parsedRecord['licensePlate']}");
+                            }
                         } else {
                             writeLog("企业微信通知发送失败: " . ($result['error'] ?? '未知错误'));
                         }

@@ -9,6 +9,7 @@ date_default_timezone_set('Asia/Shanghai');
 if (file_exists(__DIR__ . '/../daemon/config.php')) {
     require_once __DIR__ . '/../daemon/config.php';
 }
+require_once __DIR__ . '/wechat_work_webhook_notify.php';
 
 function sendServerChanMessage($title, $desp = '')
 {
@@ -181,11 +182,17 @@ function notifyBlacklistChange($conn, $plateNumber, $actionType, $reason = '', $
         $content .= "**操作人**：{$operator}\n\n";
         $content .= "**操作时间**：" . date('Y-m-d H:i:s');
     }
-
-    $serverChanResult = sendServerChanMessage($title, $content);
+    
+    $serverChanResult = ['success' => false, 'message' => '已禁用'];
+    if (NOTIFY_SERVERCHAN) {
+        $serverChanResult = sendServerChanMessage($title, $content);
+    }
     $results['serverchan'] = $serverChanResult;
 
-    $dingTalkResult = sendDingTalkMessage($title, $content);
+    $dingTalkResult = ['success' => false, 'message' => '已禁用'];
+    if (NOTIFY_DINGTALK) {
+        $dingTalkResult = sendDingTalkMessage($title, $content);
+    }
     $results['dingtalk'] = $dingTalkResult;
 
     $wechatResult = sendWechatWorkWebhookMessage($title, $content);
@@ -199,12 +206,18 @@ function testNotification()
     $results = [];
 
     $title = "🔔 CarAlert 通知测试";
-    $content = "**测试消息**\n\n车辆监控系统已配置成功！\n\n**测试时间**：" . date('Y-m-d H:i:s') . "\n\n请确认您收到了这条消息。";
+    $content = "测试消息\n\n车辆监控系统已配置成功！\n\n测试时间：" . date('Y-m-d H:i:s') . "\n\n请确认您收到了这条消息。";
 
-    $serverChanResult = sendServerChanMessage($title, $content);
+    $serverChanResult = ['success' => false, 'message' => '已禁用'];
+    if (NOTIFY_SERVERCHAN) {
+        $serverChanResult = sendServerChanMessage($title, $content);
+    }
     $results['serverchan'] = $serverChanResult;
 
-    $dingTalkResult = sendDingTalkMessage($title, $content);
+    $dingTalkResult = ['success' => false, 'message' => '已禁用'];
+    if (NOTIFY_DINGTALK) {
+        $dingTalkResult = sendDingTalkMessage($title, $content);
+    }
     $results['dingtalk'] = $dingTalkResult;
 
     $wechatResult = sendWechatWorkWebhookMessage($title, $content);

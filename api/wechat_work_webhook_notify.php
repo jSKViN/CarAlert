@@ -11,10 +11,6 @@ if (file_exists(__DIR__ . '/../daemon/config.php')) {
 
 function sendWechatWorkWebhookMessage($title, $content)
 {
-    if (!defined('NOTIFY_WECHAT_WORK_WEBHOOK') || !NOTIFY_WECHAT_WORK_WEBHOOK || !defined('WECHAT_WORK_WEBHOOK')) {
-        return ['success' => false, 'message' => '企业微信通知未启用'];
-    }
-
     $data = [
         'msgtype' => 'text',
         'text' => [
@@ -22,26 +18,59 @@ function sendWechatWorkWebhookMessage($title, $content)
         ]
     ];
 
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, WECHAT_WORK_WEBHOOK);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    $result = json_decode($response, true);
-
-    if ($result && isset($result['errcode']) && $result['errcode'] === 0) {
-        return ['success' => true, 'message' => '发送成功'];
-    } else {
-        return ['success' => false, 'error' => $result['errmsg'] ?? '未知错误'];
+    $webhooks = [];
+    
+    // 测试环境
+    if (defined('NOTIFY_WECHAT_WORK_WEBHOOK') && NOTIFY_WECHAT_WORK_WEBHOOK && defined('WECHAT_WORK_WEBHOOK') && WECHAT_WORK_WEBHOOK) {
+        $webhooks['测试环境'] = WECHAT_WORK_WEBHOOK;
     }
+    
+    // 正式环境（独立开关控制）
+    if (defined('NOTIFY_WECHAT_WORK_WEBHOOK_PROD') && NOTIFY_WECHAT_WORK_WEBHOOK_PROD && defined('WECHAT_WORK_WEBHOOK_PROD') && WECHAT_WORK_WEBHOOK_PROD) {
+        $webhooks['正式环境'] = WECHAT_WORK_WEBHOOK_PROD;
+    }
+
+    if (empty($webhooks)) {
+        return ['success' => false, 'message' => '企业微信通知未启用'];
+    }
+
+    $results = [];
+    foreach ($webhooks as $env => $webhookUrl) {
+        $ch = curl_init();
+        curl_setopt($ch, CURLOPT_URL, $webhookUrl);
+        curl_setopt($ch, CURLOPT_POST, true);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 10);
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+
+        $response = curl_exec($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        $result = json_decode($response, true);
+
+        if ($result && isset($result['errcode']) && $result['errcode'] === 0) {
+            $results[$env] = ['success' => true, 'message' => '发送成功'];
+        } else {
+            $results[$env] = ['success' => false, 'error' => $result['errmsg'] ?? '未知错误'];
+        }
+    }
+
+    $allSuccess = true;
+    foreach ($results as $r) {
+        if (!$r['success']) {
+            $allSuccess = false;
+            break;
+        }
+    }
+
+    return [
+        'success' => $allSuccess,
+        'message' => $allSuccess ? '已发送到所有启用的环境' : '部分环境发送失败',
+        'details' => $results
+    ];
 }
 
 function sendVehicleNotification($record)
