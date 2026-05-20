@@ -296,7 +296,7 @@ function mainLoop($useDb2 = false) {
         $currentLastId = checkNewData($conn);
         
         if ($currentLastId > $lastProcessedId) {
-            writeLog("发现新数据，last_record_id: {$currentLastId}");
+            writeLog("检测到新的车辆抓拍记录 (ID: {$currentLastId})");
             
             // 获取新记录
             $newRecords = getRecordsAfterId($conn, $lastProcessedId);
@@ -306,7 +306,7 @@ function mainLoop($useDb2 = false) {
                 
                 // 检查是否是拉黑车牌（优先处理）
                 if (isset($blacklistPlates[$parsedRecord['licensePlate']])) {
-                    writeLog("发现拉黑车牌: {$parsedRecord['licensePlate']}");
+                    writeLog("拉黑车牌预警触发: {$parsedRecord['licensePlate']}");
                     
                     $blacklistInfo = $blacklistPlates[$parsedRecord['licensePlate']];
                     $notifySuccess = sendBlacklistAlert($parsedRecord, $blacklistInfo);
@@ -318,7 +318,7 @@ function mainLoop($useDb2 = false) {
                 
                 // 检查是否是关注车牌
                 if (in_array($parsedRecord['licensePlate'], $watchPlates)) {
-                    writeLog("发现关注车牌: {$parsedRecord['licensePlate']}");
+                    writeLog("关注车牌提醒触发: {$parsedRecord['licensePlate']}");
                     
                     // 查询车主信息
                     $ownerInfo = getPlateOwnerInfo($conn, $parsedRecord['licensePlate']);
@@ -331,7 +331,7 @@ function mainLoop($useDb2 = false) {
                     if (NOTIFY_SERVERCHAN) {
                         $result = sendServerChanVehicleNotification($parsedRecord);
                         if ($result['success']) {
-                            writeLog("Server酱通知发送成功: {$parsedRecord['licensePlate']}");
+                            writeLog("Server酱通知已发送: {$parsedRecord['licensePlate']}");
                             $notifySuccess = true;
                         } else {
                             writeLog("Server酱通知发送失败: " . ($result['error'] ?? '未知错误'));
@@ -342,7 +342,7 @@ function mainLoop($useDb2 = false) {
                     if (NOTIFY_DINGTALK) {
                         $result = sendDingTalkVehicleNotification($parsedRecord);
                         if ($result['success']) {
-                            writeLog("钉钉通知发送成功: {$parsedRecord['licensePlate']}");
+                            writeLog("钉钉通知已发送: {$parsedRecord['licensePlate']}");
                             $notifySuccess = true;
                         } else {
                             writeLog("钉钉通知发送失败: " . ($result['error'] ?? '未知错误'));
@@ -353,10 +353,10 @@ function mainLoop($useDb2 = false) {
                     if (NOTIFY_WECHAT_WORK_WEBHOOK) {
                         $result = sendWeChatWorkWebhookVehicleNotification($parsedRecord);
                         if ($result['success']) {
-                            writeLog("企业微信Webhook通知发送成功: {$parsedRecord['licensePlate']}");
+                            writeLog("企业微信通知已发送: {$parsedRecord['licensePlate']}");
                             $notifySuccess = true;
                         } else {
-                            writeLog("企业微信Webhook通知发送失败: " . ($result['error'] ?? '未知错误'));
+                            writeLog("企业微信通知发送失败: " . ($result['error'] ?? '未知错误'));
                         }
                     }
                     
