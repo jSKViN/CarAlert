@@ -16,9 +16,9 @@ function sendWechatWorkWebhookMessage($title, $content)
     }
 
     $data = [
-        'msgtype' => 'markdown',
-        'markdown' => [
-            'content' => "**{$title}**\n\n{$content}"
+        'msgtype' => 'text',
+        'text' => [
+            'content' => "{$title}\n\n{$content}"
         ]
     ];
 
@@ -51,20 +51,25 @@ function sendVehicleNotification($record)
 
     $title = "🚗 车辆{$directionText} - {$record['licensePlate']}";
 
-    $content = "**车牌号**：{$record['licensePlate']}\n\n";
-    $content .= "**抓拍类型**：{$directionText}\n\n";
-    $content .= "**时间**：{$time}\n\n";
-    $content .= "**车道**：{$record['laneName']}\n\n";
+    $content = "车牌号：{$record['licensePlate']}\n";
+    $content .= "抓拍类型：{$directionText}\n";
+    $content .= "时间：{$time}\n";
+    $content .= "车道：{$record['laneName']}\n";
 
     if (!empty($record['ownerName'])) {
-        $content .= "**姓名**：{$record['ownerName']}\n\n";
+        $content .= "姓名：{$record['ownerName']}\n";
     }
 
     if (!empty($record['ownerDepartment'])) {
-        $content .= "**单位部门**：{$record['ownerDepartment']}\n\n";
+        $content .= "单位部门：{$record['ownerDepartment']}\n";
     }
 
     return sendWechatWorkWebhookMessage($title, $content);
+}
+
+function sendWeChatWorkWebhookVehicleNotification($record)
+{
+    return sendVehicleNotification($record);
 }
 
 function sendWeChatWorkWebhookBlacklistAlert($alertData)
@@ -74,13 +79,13 @@ function sendWeChatWorkWebhookBlacklistAlert($alertData)
 
     $title = "⛔ 拉黑车牌预警 - {$alertData['licensePlate']}";
 
-    $content = "**⚠️ 警告：发现拉黑车辆{$directionText}**\n\n";
-    $content .= "**车牌号**：{$alertData['licensePlate']}\n\n";
-    $content .= "**拉黑类型**：{$alertData['blacklistType']}\n\n";
-    $content .= "**拉黑原因**：{$alertData['reason']}\n\n";
-    $content .= "**抓拍时间**：{$time}\n\n";
-    $content .= "**车道**：{$alertData['laneName']}\n\n";
-    $content .= "**方向**：{$directionText}\n\n";
+    $content = "⚠️ 警告：发现拉黑车辆{$directionText}\n";
+    $content .= "车牌号：{$alertData['licensePlate']}\n";
+    $content .= "拉黑类型：{$alertData['blacklistType']}\n";
+    $content .= "拉黑原因：{$alertData['reason']}\n";
+    $content .= "抓拍时间：{$time}\n";
+    $content .= "车道：{$alertData['laneName']}\n";
+    $content .= "方向：{$directionText}\n";
 
     return sendWechatWorkWebhookMessage($title, $content);
 }
