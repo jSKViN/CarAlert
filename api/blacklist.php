@@ -190,6 +190,13 @@ function removeBlacklistPlate($conn, $plateNumber, $operator = 'system')
         return ['success' => false, 'message' => '车牌号不能为空'];
     }
 
+    // 先删除已存在的 is_active=0 的记录（避免唯一键冲突）
+    $deleteSql = "DELETE FROM p_blacklist_plates WHERE plate_number = ? AND is_active = 0";
+    $stmt = $conn->prepare($deleteSql);
+    $stmt->bind_param('s', $plateNumber);
+    $stmt->execute();
+    $stmt->close();
+
     $sql = "UPDATE p_blacklist_plates SET is_active = 0, updated_at = NOW() WHERE plate_number = ? AND is_active = 1";
     $stmt = $conn->prepare($sql);
     $stmt->bind_param('s', $plateNumber);
