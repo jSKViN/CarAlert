@@ -5,17 +5,22 @@
 ## 📋 功能特性
 
 ### 核心功能
-- ✅ **实时抓拍比对** - 守护进程自动检测新抓拍记录
-- ✅ **关注车牌提醒** - 关注车辆进入时发送通知
-- ✅ **拉黑车牌预警** - 拉黑车辆进入时发送告警
-- ✅ **多数据库同步** - 支持双数据库数据同步
-- ✅ **企业微信通知** - Webhook实时推送
+- ✅ **实时抓拍比对** - 守护进程自动检测新抓拍记录，比对关注/拉黑车牌
+- ✅ **关注车牌提醒** - 关注车辆被抓拍时发送企业微信通知
+- ✅ **拉黑车牌预警** - 拉黑车辆被抓拍时发送企业微信告警
+- ✅ **多数据库同步** - 支持双数据库数据同步（拉黑/关注车牌）
+- ✅ **企业微信通知** - 支持测试环境和正式环境独立配置
 
 ### 管理功能
-- ✅ **拉黑车牌管理** - 添加、编辑、删除、查询
+- ✅ **拉黑车牌管理** - 添加、编辑、删除、查询（支持临时/永久拉黑）
 - ✅ **关注车牌管理** - 添加、启用/禁用、删除
-- ✅ **操作日志记录** - 审计追溯
+- ✅ **操作日志记录** - 拉黑/关注操作审计追溯
 - ✅ **开机自启动** - Windows任务计划程序支持
+
+### 技术特性
+- ✅ **CDN资源加载** - 使用Tailwind CSS和Font Awesome CDN
+- ✅ **Windows兼容** - 守护进程支持Windows系统
+- ✅ **UTF-8编码** - 日志和数据库支持中文显示
 
 ## 🏗️ 技术架构
 
@@ -86,17 +91,21 @@ CarAlert/
 │   └── uninstall_task_en.bat # 卸载开机自启任务
 ├── database/               # 数据库脚本
 │   └── migration_blacklist.sql # 数据库迁移脚本
+├── docs/                   # 技术文档
+│   ├── README.md           # 文档说明
+│   ├── 01-系统架构.md      # 系统架构说明
+│   ├── 02-守护进程详解.md   # 守护进程工作原理
+│   ├── 03-数据库表结构.md   # 数据库设计文档
+│   ├── 04-通知系统配置.md   # 通知配置说明
+│   ├── 05-API接口文档.md    # API接口规范
+│   └── 06-部署与运维.md     # 部署运维指南
 ├── pages/                  # 前端页面
 │   ├── blacklist.php       # 拉黑车牌管理页面
 │   └── watch_plates.php    # 关注车牌管理页面
 ├── js/                     # 前端脚本
 │   └── blacklist.js        # 拉黑管理页脚本
-├── tests/                  # 测试文件
-│   ├── BlacklistApiTest.php
-│   ├── BlacklistIntegrationTest.php
-│   ├── DatabaseHelperTest.php
-│   └── run_tests.php
 ├── .gitignore              # Git忽略配置
+├── CarAlert.code-workspace # VS Code工作区配置
 ├── index.php               # 首页
 └── README.md               # 项目说明
 ```
@@ -223,14 +232,50 @@ UPDATE p_update_flag SET last_record_id = (SELECT MAX(id) FROM p_distinguish_log
 | created_at | TIMESTAMP | 创建时间 |
 | updated_at | TIMESTAMP | 更新时间 |
 
+### 拉黑操作日志表 (p_blacklist_log)
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | INT | 自增ID |
+| plate_number | VARCHAR(20) | 车牌号 |
+| action_type | VARCHAR(20) | 操作类型（ADD/REMOVE/UPDATE） |
+| reason | VARCHAR(500) | 原因/备注 |
+| operator | VARCHAR(50) | 操作人 |
+| old_data | JSON | 操作前数据 |
+| new_data | JSON | 操作后数据 |
+| created_at | TIMESTAMP | 操作时间 |
+
+### 关注操作日志表 (p_watch_log)
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | INT | 自增ID |
+| plate_number | VARCHAR(20) | 车牌号 |
+| action_type | VARCHAR(20) | 操作类型（ADD/ENABLE/DISABLE/DELETE） |
+| reason | VARCHAR(500) | 原因/备注 |
+| operator | VARCHAR(50) | 操作人 |
+| old_data | JSON | 操作前数据 |
+| new_data | JSON | 操作后数据 |
+| created_at | TIMESTAMP | 操作时间 |
+
+### 更新标记表 (p_update_flag)
+| 字段 | 类型 | 说明 |
+|---|---|---|
+| id | INT | 主键ID |
+| last_record_id | BIGINT | 最后处理的记录ID |
+| notify_count | INT | 已发送通知数 |
+| updated_at | TIMESTAMP | 更新时间 |
+
 ## 🔧 配置说明
 
 ### 通知渠道配置
 
 ```php
-// 企业微信Webhook（推荐）
+// 企业微信Webhook测试环境（默认启用）
 define('NOTIFY_WECHAT_WORK_WEBHOOK', true);
 define('WECHAT_WORK_WEBHOOK', 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx');
+
+// 企业微信Webhook正式环境（默认关闭，上线时改为true）
+define('NOTIFY_WECHAT_WORK_WEBHOOK_PROD', false);
+define('WECHAT_WORK_WEBHOOK_PROD', 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx');
 
 // 钉钉（已禁用）
 define('NOTIFY_DINGTALK', false);
@@ -248,6 +293,24 @@ define('POLL_INTERVAL', 1);
 // 日志文件
 $logFile = __DIR__ . '/daemon.log';
 $pidFile = __DIR__ . '/daemon.pid';
+```
+
+### 多数据库配置
+
+```php
+// 主数据库（数据库1）
+define('DB_HOST', '127.0.0.1');
+define('DB_PORT', 33306);
+define('DB_USER', 'root');
+define('DB_PASS', 'your_password');
+define('DB_NAME', 'bs_park_client');
+
+// 备用数据库（数据库2，用于同步）
+define('DB2_HOST', '192.168.2.190');
+define('DB2_PORT', 33306);
+define('DB2_USER', 'root');
+define('DB2_PASS', 'your_password');
+define('DB2_NAME', 'bs_park_client');
 ```
 
 ## 📝 API 接口
