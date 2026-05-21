@@ -21,9 +21,23 @@ $pidFile = __DIR__ . '/daemon.pid';
 
 /**
  * 写入日志
+ * @param mixed $message 日志消息（可以是字符串、数组、对象等）
+ * @return void
  */
-function writeLog($message) {
+function writeLog($message): void {
     global $logFile;
+    
+    // 确保 message 是字符串类型
+    if (is_array($message)) {
+        $message = json_encode($message, JSON_UNESCAPED_UNICODE);
+    } elseif (is_object($message)) {
+        $message = print_r($message, true);
+    } elseif ($message === null) {
+        $message = 'null';
+    } elseif (!is_string($message)) {
+        $message = strval($message);
+    }
+    
     $time = date('Y-m-d H:i:s');
     $log = "[{$time}] {$message}\n";
     
@@ -44,8 +58,9 @@ function writeLog($message) {
 
 /**
  * 获取数据库连接
+ * @return mysqli|null
  */
-function getDbConnection() {
+function getDbConnection(): ?mysqli {
     $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME, DB_PORT);
     if ($conn->connect_error) {
         writeLog("数据库连接失败: " . $conn->connect_error);
@@ -57,8 +72,9 @@ function getDbConnection() {
 
 /**
  * 获取第二数据库连接
+ * @return mysqli|null
  */
-function getDb2Connection() {
+function getDb2Connection(): ?mysqli {
     if (!defined('DB2_HOST')) {
         return null;
     }
@@ -73,8 +89,10 @@ function getDb2Connection() {
 
 /**
  * 检查是否有新数据
+ * @param mysqli $conn 数据库连接
+ * @return int
  */
-function checkNewData($conn) {
+function checkNewData(mysqli $conn): int {
     $sql = "SELECT last_record_id FROM p_update_flag WHERE id = 1";
     $result = $conn->query($sql);
     if ($result && $row = $result->fetch_assoc()) {
@@ -85,8 +103,10 @@ function checkNewData($conn) {
 
 /**
  * 获取关注的车牌列表
+ * @param mysqli $conn 数据库连接
+ * @return array
  */
-function getWatchPlates($conn) {
+function getWatchPlates(mysqli $conn): array {
     $plates = [];
     $sql = "SELECT plate_number FROM p_watch_plates WHERE is_active = 1";
     $result = $conn->query($sql);
@@ -100,8 +120,10 @@ function getWatchPlates($conn) {
 
 /**
  * 获取拉黑的车牌列表（包含拉黑原因）
+ * @param mysqli $conn 数据库连接
+ * @return array
  */
-function getBlacklistPlates($conn) {
+function getBlacklistPlates(mysqli $conn): array {
     $plates = [];
     $sql = "SELECT plate_number, reason, blacklist_type FROM p_blacklist_plates 
             WHERE is_active = 1 AND (blacklist_type = 2 OR (blacklist_type = 1 AND end_time > NOW()))";
@@ -119,8 +141,11 @@ function getBlacklistPlates($conn) {
 
 /**
  * 获取车牌的车主信息
+ * @param mysqli $conn 数据库连接
+ * @param string $plateNumber 车牌号
+ * @return array
  */
-function getPlateOwnerInfo($conn, $plateNumber) {
+function getPlateOwnerInfo(mysqli $conn, string $plateNumber): array {
     $info = ['name' => '', 'department' => ''];
     $sql = "SELECT coc.owner_name, co.dept_name 
             FROM charge_order_car coc 
@@ -140,9 +165,18 @@ function getPlateOwnerInfo($conn, $plateNumber) {
 
 /**
  * 获取指定ID之后的记录
+ * @param mysqli $conn 数据库连接
+ * @param int $lastId 最后处理的记录ID
+ * @return array
  */
-function getRecordsAfterId($conn, $lastId) {
+function getRecordsAfterId(mysqli $conn, int $lastId): array {
     $records = [];
+    
+    // 验证输入参数
+    if (!($conn instanceof mysqli) || $lastId === null || !is_numeric($lastId)) {
+        return $records;
+    }
+    
     $sql = "SELECT 
                 d.id,
                 d.plate_number,
@@ -153,29 +187,58 @@ function getRecordsAfterId($conn, $lastId) {
                 l.direction as lane_direction
             FROM p_distinguish_log d
             LEFT JOIN p_lane l ON d.lane_id = l.lane_id
-            WHERE d.id > {$lastId}
+            WHERE d.id > ?
             ORDER BY d.id ASC";
     
-    $result = $conn->query($sql);
-    if ($result) {
+    $stmt = $conn->prepare($sql);
+    if (!$stmt) {
+        writeLog("SQL准备失败: " . $conn->error);
+        return $records;
+    }
+    
+    $lastId = intval($lastId);
+    $stmt->bind_param('i', $lastId);
+    
+    if (!$stmt->execute()) {
+        writeLog("SQL执行失败: " . $stmt->error);
+        $stmt->close();
+        return $records;
+    }
+    
+    $result = $stmt->get_result();
+    if ($result && $result instanceof mysqli_result) {
         while ($row = $result->fetch_assoc()) {
-            $records[] = $row;
+            if (is_array($row)) {
+                $records[] = $row;
+            }
         }
     }
+    
+    $stmt->close();
     return $records;
 }
 
 /**
  * 解析记录数据
+ * @param array $record 数据库记录
+ * @return array
  */
-function parseRecord($record) {
-    $realTimeInfo = json_decode($record['real_time_info'], true);
-    $accessInfo = json_decode($record['access_info'], true);
+function parseRecord(array $record): array {
+    // 确保JSON解码结果为数组，失败时返回空数组
+    $realTimeInfo = json_decode($record['real_time_info'] ?? '{}', true);
+    if (!is_array($realTimeInfo)) {
+        $realTimeInfo = [];
+    }
+    
+    $accessInfo = json_decode($record['access_info'] ?? '{}', true);
+    if (!is_array($accessInfo)) {
+        $accessInfo = [];
+    }
     
     return [
         'id' => $record['id'],
-        'licensePlate' => $record['plate_number'],
-        'timestamp' => $record['create_time'],
+        'licensePlate' => $record['plate_number'] ?? '',
+        'timestamp' => $record['create_time'] ?? '',
         'laneName' => $record['lane_name'] ?? '未知车道',
         'direction' => ($record['lane_direction'] ?? 0) == 0 ? '进入' : '离开',
         'carType' => $realTimeInfo['carType'] ?? '',
@@ -186,75 +249,121 @@ function parseRecord($record) {
 
 /**
  * 更新最后处理ID
+ * @param mysqli $conn 数据库连接
+ * @param int $recordId 记录ID
+ * @return bool
  */
-function updateLastRecordId($conn, $recordId) {
-    $sql = "UPDATE p_update_flag SET last_record_id = {$recordId} WHERE id = 1";
-    return $conn->query($sql);
+function updateLastRecordId(mysqli $conn, int $recordId): bool {
+    // 验证输入参数
+    if (!($conn instanceof mysqli) || $recordId === null || !is_numeric($recordId)) {
+        return false;
+    }
+    
+    $sql = "UPDATE p_update_flag SET last_record_id = ? WHERE id = 1";
+    $stmt = $conn->prepare($sql);
+    
+    if (!$stmt) {
+        writeLog("SQL准备失败: " . $conn->error);
+        return false;
+    }
+    
+    $recordId = intval($recordId);
+    $stmt->bind_param('i', $recordId);
+    
+    $result = $stmt->execute();
+    $stmt->close();
+    
+    return $result;
 }
 
 /**
  * 增加通知计数
+ * @param mysqli $conn 数据库连接
+ * @return bool
  */
-function incrementNotifyCount($conn) {
+function incrementNotifyCount(mysqli $conn): bool {
     $sql = "UPDATE p_update_flag SET notify_count = notify_count + 1 WHERE id = 1";
     return $conn->query($sql);
 }
 
 /**
  * 发送拉黑预警通知
+ * @param array $record 记录数据
+ * @param array $blacklistInfo 拉黑信息
+ * @return array
  */
-function sendBlacklistAlert($record, $blacklistInfo) {
+function sendBlacklistAlert(array $record, array $blacklistInfo): array {
     $notifySuccess = false;
+    $details = [];
+    
+    // 确保输入参数是数组
+    if (!is_array($record)) {
+        return ['success' => false, 'error' => 'record 不是数组'];
+    }
+    if (!is_array($blacklistInfo)) {
+        return ['success' => false, 'error' => 'blacklistInfo 不是数组'];
+    }
+    
+    $licensePlate = $record['licensePlate'] ?? '';
     
     $alertData = [
-        'licensePlate' => $record['licensePlate'],
-        'timestamp' => $record['timestamp'],
-        'laneName' => $record['laneName'],
-        'direction' => $record['direction'],
-        'reason' => $blacklistInfo['reason'],
-        'blacklistType' => $blacklistInfo['type']
+        'licensePlate' => $licensePlate,
+        'timestamp' => $record['timestamp'] ?? '',
+        'laneName' => $record['laneName'] ?? '',
+        'direction' => $record['direction'] ?? '',
+        'reason' => $blacklistInfo['reason'] ?? '',
+        'blacklistType' => $blacklistInfo['type'] ?? ''
     ];
     
-    // 发送企业微信 Webhook 通知
-    if (NOTIFY_WECHAT_WORK_WEBHOOK) {
+    // 发送企业微信 Webhook 通知（测试环境或正式环境任一启用即可）
+    if (NOTIFY_WECHAT_WORK_WEBHOOK || NOTIFY_WECHAT_WORK_WEBHOOK_PROD) {
         $result = sendWeChatWorkWebhookBlacklistAlert($alertData);
-        if ($result['success']) {
-            writeLog("企业微信Webhook拉黑预警发送成功: {$record['licensePlate']}");
+        if (is_array($result) && $result['success']) {
+            writeLog("企业微信Webhook拉黑预警发送成功: {$licensePlate}");
             $notifySuccess = true;
+            // 收集详细结果
+            if (isset($result['details']) && is_array($result['details'])) {
+                $details = array_merge($details, $result['details']);
+            }
         } else {
-            writeLog("企业微信Webhook拉黑预警发送失败: " . ($result['error'] ?? '未知错误'));
+            $error = is_array($result) ? ($result['error'] ?? '未知错误') : '未知错误';
+            writeLog("企业微信Webhook拉黑预警发送失败: " . $error);
         }
     }
     
     // 发送钉钉通知
     if (NOTIFY_DINGTALK) {
         $result = sendDingTalkBlacklistAlert($alertData);
-        if ($result['success']) {
-            writeLog("钉钉拉黑预警发送成功: {$record['licensePlate']}");
+        if (is_array($result) && $result['success']) {
+            writeLog("钉钉拉黑预警发送成功: {$licensePlate}");
             $notifySuccess = true;
         } else {
-            writeLog("钉钉拉黑预警发送失败: " . ($result['error'] ?? '未知错误'));
+            $error = is_array($result) ? ($result['error'] ?? '未知错误') : '未知错误';
+            writeLog("钉钉拉黑预警发送失败: " . $error);
         }
     }
     
     // 发送 Server酱 通知
     if (NOTIFY_SERVERCHAN) {
         $result = sendBlacklistNotification($alertData);
-        if ($result['success']) {
-            writeLog("Server酱拉黑预警发送成功: {$record['licensePlate']}");
+        if (is_array($result) && $result['success']) {
+            writeLog("Server酱拉黑预警发送成功: {$licensePlate}");
             $notifySuccess = true;
         } else {
-            writeLog("Server酱拉黑预警发送失败: " . ($result['error'] ?? '未知错误'));
+            $error = is_array($result) ? ($result['error'] ?? '未知错误') : '未知错误';
+            writeLog("Server酱拉黑预警发送失败: " . $error);
         }
     }
     
-    return $notifySuccess;
+    return ['success' => $notifySuccess, 'details' => $details];
 }
 
 /**
  * 主循环
+ * @param bool $useDb2 是否使用第二数据库
+ * @return void
  */
-function mainLoop($useDb2 = false) {
+function mainLoop(bool $useDb2 = false): void {
     global $pidFile;
     
     // 写入PID文件
@@ -298,6 +407,14 @@ function mainLoop($useDb2 = false) {
         $watchPlates = getWatchPlates($conn);
         $blacklistPlates = getBlacklistPlates($conn);
         
+        // 确保变量类型正确
+        if (!is_array($watchPlates)) {
+            $watchPlates = [];
+        }
+        if (!is_array($blacklistPlates)) {
+            $blacklistPlates = [];
+        }
+        
         if (empty($watchPlates) && empty($blacklistPlates)) {
             sleep(POLL_INTERVAL);
             continue;
@@ -312,43 +429,61 @@ function mainLoop($useDb2 = false) {
             // 获取新记录
             $newRecords = getRecordsAfterId($conn, $lastProcessedId);
             
+            // 确保 newRecords 是数组
+            if (!is_array($newRecords)) {
+                $newRecords = [];
+            }
+            
             foreach ($newRecords as $record) {
+                // 确保 record 是数组
+                if (!is_array($record)) {
+                    continue;
+                }
+                
                 $parsedRecord = parseRecord($record);
                 
+                // 确保 parsedRecord 是数组
+                if (!is_array($parsedRecord)) {
+                    continue;
+                }
+                
+                $licensePlate = $parsedRecord['licensePlate'] ?? '';
+                
                 // 检查是否是拉黑车牌（优先处理）
-                if (isset($blacklistPlates[$parsedRecord['licensePlate']])) {
-                    writeLog("拉黑车牌预警触发: {$parsedRecord['licensePlate']}");
+                if (!empty($licensePlate) && isset($blacklistPlates[$licensePlate])) {
+                    writeLog("拉黑车牌预警触发: {$licensePlate}");
 
-                    $blacklistInfo = $blacklistPlates[$parsedRecord['licensePlate']];
+                    $blacklistInfo = $blacklistPlates[$licensePlate];
                     $notifyResult = sendBlacklistAlert($parsedRecord, $blacklistInfo);
                     $notifySuccess = false;
 
                     if (isset($notifyResult['success']) && $notifyResult['success']) {
                         $notifySuccess = true;
-                        if (isset($notifyResult['details'])) {
+                        if (isset($notifyResult['details']) && is_array($notifyResult['details'])) {
                             foreach ($notifyResult['details'] as $env => $r) {
-                                if ($r['success']) {
-                                    writeLog("企业微信[{$env}]拉黑预警已发送: {$parsedRecord['licensePlate']}");
+                                if (is_array($r) && $r['success']) {
+                                    writeLog("企业微信[{$env}]拉黑预警已发送: {$licensePlate}");
                                 } else {
-                                    writeLog("企业微信[{$env}]拉黑预警发送失败: " . ($r['error'] ?? '未知错误'));
+                                    $error = is_array($r) ? ($r['error'] ?? '未知错误') : '未知错误';
+                                    writeLog("企业微信[{$env}]拉黑预警发送失败: " . $error);
                                 }
                             }
                         } else {
-                            writeLog("企业微信拉黑预警已发送: {$parsedRecord['licensePlate']}");
+                            writeLog("企业微信拉黑预警已发送: {$licensePlate}");
                         }
                         incrementNotifyCount($conn);
                     } else {
-                        $errorMsg = $notifyResult['error'] ?? '未知错误';
+                        $errorMsg = is_array($notifyResult) ? ($notifyResult['error'] ?? '未知错误') : '未知错误';
                         writeLog("企业微信拉黑预警发送失败: " . $errorMsg);
                     }
                 }
                 
                 // 检查是否是关注车牌
-                if (in_array($parsedRecord['licensePlate'], $watchPlates)) {
-                    writeLog("关注车牌提醒触发: {$parsedRecord['licensePlate']}");
+                if (!empty($licensePlate) && is_array($watchPlates) && in_array($licensePlate, $watchPlates)) {
+                    writeLog("关注车牌提醒触发: {$licensePlate}");
                     
                     // 查询车主信息
-                    $ownerInfo = getPlateOwnerInfo($conn, $parsedRecord['licensePlate']);
+                    $ownerInfo = getPlateOwnerInfo($conn, $licensePlate);
                     $parsedRecord['ownerName'] = $ownerInfo['name'];
                     $parsedRecord['ownerDepartment'] = $ownerInfo['department'];
                     
@@ -357,43 +492,47 @@ function mainLoop($useDb2 = false) {
                     // 发送 Server酱 通知
                     if (NOTIFY_SERVERCHAN) {
                         $result = sendServerChanVehicleNotification($parsedRecord);
-                        if ($result['success']) {
-                            writeLog("Server酱通知已发送: {$parsedRecord['licensePlate']}");
+                        if (is_array($result) && $result['success']) {
+                            writeLog("Server酱通知已发送: {$licensePlate}");
                             $notifySuccess = true;
                         } else {
-                            writeLog("Server酱通知发送失败: " . ($result['error'] ?? '未知错误'));
+                            $error = is_array($result) ? ($result['error'] ?? '未知错误') : '未知错误';
+                            writeLog("Server酱通知发送失败: " . $error);
                         }
                     }
                     
                     // 发送钉钉通知
                     if (NOTIFY_DINGTALK) {
                         $result = sendDingTalkVehicleNotification($parsedRecord);
-                        if ($result['success']) {
-                            writeLog("钉钉通知已发送: {$parsedRecord['licensePlate']}");
+                        if (is_array($result) && $result['success']) {
+                            writeLog("钉钉通知已发送: {$licensePlate}");
                             $notifySuccess = true;
                         } else {
-                            writeLog("钉钉通知发送失败: " . ($result['error'] ?? '未知错误'));
+                            $error = is_array($result) ? ($result['error'] ?? '未知错误') : '未知错误';
+                            writeLog("钉钉通知发送失败: " . $error);
                         }
                     }
                     
-                    // 发送企业微信 Webhook 通知
-                    if (NOTIFY_WECHAT_WORK_WEBHOOK) {
+                    // 发送企业微信 Webhook 通知（测试环境或正式环境任一启用即可）
+                    if (NOTIFY_WECHAT_WORK_WEBHOOK || NOTIFY_WECHAT_WORK_WEBHOOK_PROD) {
                         $result = sendWeChatWorkWebhookVehicleNotification($parsedRecord);
-                        if (isset($result['success']) && $result['success']) {
+                        if (is_array($result) && isset($result['success']) && $result['success']) {
                             $notifySuccess = true;
-                            if (isset($result['details'])) {
+                            if (isset($result['details']) && is_array($result['details'])) {
                                 foreach ($result['details'] as $env => $r) {
-                                    if ($r['success']) {
-                                        writeLog("企业微信[{$env}]通知已发送: {$parsedRecord['licensePlate']}");
+                                    if (is_array($r) && $r['success']) {
+                                        writeLog("企业微信[{$env}]通知已发送: {$licensePlate}");
                                     } else {
-                                        writeLog("企业微信[{$env}]通知发送失败: " . ($r['error'] ?? '未知错误'));
+                                        $error = is_array($r) ? ($r['error'] ?? '未知错误') : '未知错误';
+                                        writeLog("企业微信[{$env}]通知发送失败: " . $error);
                                     }
                                 }
                             } else {
-                                writeLog("企业微信通知已发送: {$parsedRecord['licensePlate']}");
+                                writeLog("企业微信通知已发送: {$licensePlate}");
                             }
                         } else {
-                            writeLog("企业微信通知发送失败: " . ($result['error'] ?? '未知错误'));
+                            $error = is_array($result) ? ($result['error'] ?? '未知错误') : '未知错误';
+                            writeLog("企业微信通知发送失败: " . $error);
                         }
                     }
                     
@@ -403,7 +542,7 @@ function mainLoop($useDb2 = false) {
                 }
                 
                 // 更新最后处理ID
-                $lastProcessedId = $record['id'];
+                $lastProcessedId = $record['id'] ?? 0;
                 updateLastRecordId($conn, $lastProcessedId);
             }
         }
