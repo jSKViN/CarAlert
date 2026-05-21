@@ -176,7 +176,7 @@ PUT /blacklist.php
 | `reason` | string | 否 | 拉黑原因 |
 | `operator` | string | 否 | 操作人 |
 | `blacklist_type` | int | 否 | 类型：1-临时，2-永久 |
-| `days` | int | 否 | 临时拉黑天数 |
+| `days` | int | 否 | 临时拉黑天数（仅当 type=1 时有效） |
 
 **响应示例**:
 ```json
@@ -187,6 +187,8 @@ PUT /blacklist.php
     "timestamp": 1778997125000
 }
 ```
+
+> **注意**：更新操作会同时发送企业微信通知，通知内容包含更新的信息。
 
 ---
 
