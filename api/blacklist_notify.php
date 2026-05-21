@@ -110,42 +110,42 @@ function notifyBlacklistChange($conn, $plateNumber, $actionType, $reason = '', $
         $typeLabel = ($plateInfo['blacklist_type'] ?? 1) == 2 ? '永久拉黑' : '临时拉黑';
         $endTimeText = !empty($plateInfo['end_time']) ? date('Y-m-d H:i:s', strtotime($plateInfo['end_time'])) : '永久';
 
-        $content = "**车牌号**：{$plateNumber}\n\n";
-        $content .= "**拉黑类型**：{$typeLabel}\n\n";
-        $content .= "**结束时间**：{$endTimeText}\n\n";
+        $content = "车牌号：{$plateNumber}\n";
+        $content .= "拉黑类型：{$typeLabel}\n";
+        $content .= "结束时间：{$endTimeText}\n";
         if (!empty($reason)) {
-            $content .= "**拉黑原因**：{$reason}\n\n";
+            $content .= "拉黑原因：{$reason}\n";
         }
-        $content .= "**操作人**：{$operator}\n\n";
-        $content .= "**操作时间**：" . date('Y-m-d H:i:s') . "\n\n";
-        $content .= "---\n*请注意该车辆的进出记录*";
+        $content .= "操作人：{$operator}\n";
+        $content .= "操作时间：" . date('Y-m-d H:i:s') . "\n";
+        $content .= "请注意该车辆的进出记录";
 
     } elseif ($actionType === 'REMOVE') {
         $typeText = '解除拉黑';
         $emoji = '🟢';
         $title = "{$emoji} 车辆解除拉黑 - {$plateNumber}";
 
-        $content = "**车牌号**：{$plateNumber}\n\n";
-        $content .= "**操作类型**：解除拉黑\n\n";
+        $content = "车牌号：{$plateNumber}\n";
+        $content .= "操作类型：解除拉黑\n";
         if (!empty($reason)) {
-            $content .= "**原因**：{$reason}\n\n";
+            $content .= "原因：{$reason}\n";
         }
-        $content .= "**操作人**：{$operator}\n\n";
-        $content .= "**操作时间**：" . date('Y-m-d H:i:s') . "\n\n";
-        $content .= "---\n*该车辆已恢复正常通行*";
+        $content .= "操作人：{$operator}\n";
+        $content .= "操作时间：" . date('Y-m-d H:i:s') . "\n";
+        $content .= "该车辆已恢复正常通行";
 
     } else {
         $typeText = '更新信息';
         $emoji = '📝';
         $title = "{$emoji} 车辆拉黑信息更新 - {$plateNumber}";
 
-        $content = "**车牌号**：{$plateNumber}\n\n";
-        $content .= "**操作类型**：信息更新\n\n";
+        $content = "车牌号：{$plateNumber}\n";
+        $content .= "操作类型：信息更新\n";
         if (!empty($reason)) {
-            $content .= "**更新内容**：{$reason}\n\n";
+            $content .= "更新内容：{$reason}\n";
         }
-        $content .= "**操作人**：{$operator}\n\n";
-        $content .= "**操作时间**：" . date('Y-m-d H:i:s');
+        $content .= "操作人：{$operator}\n";
+        $content .= "操作时间：" . date('Y-m-d H:i:s');
     }
     
     $serverChanResult = ['success' => false, 'message' => '已禁用'];

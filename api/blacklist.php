@@ -273,6 +273,7 @@ function updateBlacklistPlate($conn, $plateNumber, $data)
 
         if ($affectedRows > 0) {
             logBlacklistAction($conn, $plateNumber, 'UPDATE', $data['reason'] ?? '', $data['operator'] ?? 'system');
+            notifyBlacklistChange($conn, $plateNumber, 'UPDATE', $data['reason'] ?? '', $data['operator'] ?? 'system');
             return ['success' => true, 'message' => '更新成功'];
         }
         return ['success' => false, 'message' => '该车牌不在拉黑列表中'];
