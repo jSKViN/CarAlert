@@ -50,7 +50,7 @@ DatabaseHelper::closeConnection(1);
                     <i class="fa fa-circle text-green-400 mr-2"></i>
                     <span>系统正常</span>
                 </span>
-                <a href="index.php" class="bg-red-700 hover:bg-red-800 px-3 py-1 rounded-md text-sm">
+                <a href="../index.php" class="bg-red-700 hover:bg-red-800 px-3 py-1 rounded-md text-sm">
                     <i class="fa fa-home mr-1"></i>返回首页
                 </a>
             </div>

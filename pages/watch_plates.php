@@ -137,7 +137,7 @@ if ($conn2) DatabaseHelper::closeConnection(2);
                 <i class="fa fa-bell mr-2"></i>关注车牌管理
             </h1>
             <div class="flex items-center space-x-4">
-                <a href="index.php" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded-md text-sm">
+                <a href="../index.php" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded-md text-sm">
                     <i class="fa fa-home mr-1"></i>返回首页
                 </a>
             </div>
@@ -265,7 +265,7 @@ if ($conn2) DatabaseHelper::closeConnection(2);
         </div>
 
         <div class="mt-6 text-center">
-            <a href="index.php" class="text-blue-600 hover:text-blue-800">
+            <a href="../index.php" class="text-blue-600 hover:text-blue-800">
                 <i class="fa fa-arrow-left mr-1"></i>返回首页
             </a>
         </div>

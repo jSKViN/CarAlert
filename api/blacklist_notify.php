@@ -90,41 +90,6 @@ function sendDingTalkMessage($title, $content)
     }
 }
 
-function sendWechatWorkWebhookMessage($title, $content)
-{
-    if (!defined('NOTIFY_WECHAT_WORK_WEBHOOK') || !NOTIFY_WECHAT_WORK_WEBHOOK || !defined('WECHAT_WORK_WEBHOOK')) {
-        return ['success' => false, 'message' => '企业微信通知未启用'];
-    }
-
-    $data = [
-        'msgtype' => 'markdown',
-        'markdown' => [
-            'content' => "**{$title}**\n\n{$content}"
-        ]
-    ];
-
-    $ch = curl_init();
-    curl_setopt($ch, CURLOPT_URL, WECHAT_WORK_WEBHOOK);
-    curl_setopt($ch, CURLOPT_POST, true);
-    curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
-    curl_setopt($ch, CURLOPT_TIMEOUT, 10);
-    curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
-
-    $response = curl_exec($ch);
-    $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-    curl_close($ch);
-
-    $result = json_decode($response, true);
-
-    if ($result && isset($result['errcode']) && $result['errcode'] === 0) {
-        return ['success' => true, 'message' => '发送成功'];
-    } else {
-        return ['success' => false, 'error' => $result['errmsg'] ?? '未知错误'];
-    }
-}
-
 function notifyBlacklistChange($conn, $plateNumber, $actionType, $reason = '', $operator = 'system')
 {
     $results = [];
