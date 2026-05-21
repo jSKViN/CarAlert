@@ -8,6 +8,11 @@
 daemon/config.local.php
 daemon/config.php
 
+# 环境变量文件（包含敏感信息）
+.env
+.env.dev
+.env.local
+
 # 测试文件
 tests/
 *.test.php
