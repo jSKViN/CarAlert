@@ -171,7 +171,7 @@ function testNotification()
     $results = [];
 
     $title = "🔔 CarAlert 通知测试";
-    $content = "测试消息\n\n车辆监控系统已配置成功！\n\n测试时间：" . date('Y-m-d H:i:s') . "\n\n请确认您收到了这条消息。";
+    $content = "测试消息\n车辆监控系统已配置成功！\n测试时间：" . date('Y-m-d H:i:s') . "\n请确认您收到了这条消息。";
 
     $serverChanResult = ['success' => false, 'message' => '已禁用'];
     if (defined('NOTIFY_SERVERCHAN') && NOTIFY_SERVERCHAN) {
