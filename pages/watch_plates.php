@@ -112,9 +112,17 @@ if ($conn) {
 
 $stats = [];
 if ($conn) {
-    $result = $conn->query("SELECT last_record_id, notify_count FROM p_update_flag WHERE id = 1");
+    $result = $conn->query("SELECT notify_count FROM p_update_flag WHERE id = 1");
     if ($result && $row = $result->fetch_assoc()) {
         $stats = $row;
+    }
+}
+
+// 获取启用中的关注车牌数量
+$activeCount = 0;
+foreach ($watchPlates as $plate) {
+    if ($plate['is_active']) {
+        $activeCount++;
     }
 }
 
@@ -155,8 +163,8 @@ if ($conn2) DatabaseHelper::closeConnection(2);
                 <div class="text-2xl font-bold text-blue-600"><?php echo count($watchPlates); ?></div>
             </div>
             <div class="bg-white rounded-lg shadow p-4">
-                <div class="text-gray-500 text-sm">已处理记录</div>
-                <div class="text-2xl font-bold text-green-600"><?php echo $stats['last_record_id'] ?? 0; ?></div>
+                <div class="text-gray-500 text-sm">已启用数量</div>
+                <div class="text-2xl font-bold text-green-600"><?php echo $activeCount; ?></div>
             </div>
             <div class="bg-white rounded-lg shadow p-4">
                 <div class="text-gray-500 text-sm">已发送通知</div>
