@@ -135,18 +135,27 @@ SOURCE database/migration_blacklist.sql;
 ```
 
 3. **配置连接信息**
+
+复制配置模板并填写真实信息：
+```bash
+copy daemon/config.template.php daemon/config.php
+```
+
 编辑 `daemon/config.php`：
 ```php
 // 数据库1配置
-define('DB1_HOST', 'localhost');
-define('DB1_USER', 'root');
-define('DB1_PASS', 'your_password');
-define('DB1_NAME', 'car_alert');
+define('DB_HOST', 'localhost');
+define('DB_PORT', 3306);
+define('DB_USER', 'root');
+define('DB_PASS', 'your_password');
+define('DB_NAME', 'car_alert');
 
 // 企业微信Webhook配置
 define('NOTIFY_WECHAT_WORK_WEBHOOK', true);
 define('WECHAT_WORK_WEBHOOK', 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=your_key');
 ```
+
+> **注意**：`daemon/config.php` 文件已被 `.gitignore` 忽略，不会提交到版本控制。
 
 4. **启动守护进程**
 ```cmd
