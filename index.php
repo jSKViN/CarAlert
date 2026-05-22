@@ -55,6 +55,7 @@ if ($conn) {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="/caralert/" />
     <title>CarAlert - 车辆监控预警系统</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
@@ -135,10 +136,6 @@ if ($conn) {
                     <div class="flex justify-between items-center py-2 border-b">
                         <span class="text-gray-600">数据库连接</span>
                         <span class="text-green-600"><i class="fa fa-check-circle mr-1"></i>正常</span>
-                    </div>
-                    <div class="flex justify-between items-center py-2 border-b">
-                        <span class="text-gray-600">WebSocket服务</span>
-                        <span class="text-gray-500"><i class="fa fa-question-circle mr-1"></i>未检测</span>
                     </div>
                     <div class="flex justify-between items-center py-2 border-b">
                         <span class="text-gray-600">通知服务</span>

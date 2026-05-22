@@ -31,6 +31,7 @@ DatabaseHelper::closeConnection(1);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="/caralert/" />
     <title>拉黑车牌管理 - CarAlert</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
@@ -50,7 +51,7 @@ DatabaseHelper::closeConnection(1);
                     <i class="fa fa-circle text-green-400 mr-2"></i>
                     <span>系统正常</span>
                 </span>
-                <a href="../index.php" class="bg-red-700 hover:bg-red-800 px-3 py-1 rounded-md text-sm">
+                <a href="index.php" class="bg-red-700 hover:bg-red-800 px-3 py-1 rounded-md text-sm">
                     <i class="fa fa-home mr-1"></i>返回首页
                 </a>
             </div>
@@ -224,6 +225,6 @@ DatabaseHelper::closeConnection(1);
     <div id="toast" class="fixed bottom-4 right-4 px-6 py-3 rounded-lg shadow-lg transform translate-y-20 opacity-0 transition-all duration-300">
     </div>
 
-    <script src="../js/blacklist.js"></script>
+    <script src="js/blacklist.js"></script>
 </body>
 </html>
