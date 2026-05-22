@@ -1,4 +1,4 @@
-const API_BASE = '../api/blacklist.php';
+const API_BASE = 'api/blacklist.php';
 let currentPage = 1;
 let pageSize = 20;
 let totalCount = 0;
@@ -323,7 +323,7 @@ async function updatePlate(formData) {
 
 async function testNotification() {
     try {
-        const response = await fetch('../api/blacklist_notify.php?action=test');
+        const response = await fetch('api/blacklist_notify.php?action=test');
         const result = await response.json();
 
         if (result.success) {
