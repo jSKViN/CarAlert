@@ -31,7 +31,7 @@ DatabaseHelper::closeConnection(1);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <base href="/caralert/" />
+    <base href="../" />
     <title>拉黑车牌管理 - CarAlert</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
