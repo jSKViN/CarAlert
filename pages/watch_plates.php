@@ -134,6 +134,7 @@ if ($conn2) DatabaseHelper::closeConnection(2);
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="/caralert/" />
     <title>关注车牌管理 - CarAlert</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
@@ -145,7 +146,7 @@ if ($conn2) DatabaseHelper::closeConnection(2);
                 <i class="fa fa-bell mr-2"></i>关注车牌管理
             </h1>
             <div class="flex items-center space-x-4">
-                <a href="../index.php" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded-md text-sm">
+                <a href="index.php" class="bg-blue-700 hover:bg-blue-800 px-3 py-1 rounded-md text-sm">
                     <i class="fa fa-home mr-1"></i>返回首页
                 </a>
             </div>
