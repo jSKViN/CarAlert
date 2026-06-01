@@ -14,10 +14,13 @@ require_once __DIR__ . '/../api/serverchan_notify.php';
 require_once __DIR__ . '/../api/dingtalk_notify.php';
 require_once __DIR__ . '/../api/wechat_work_webhook_notify.php';
 
-// 日志文件和PID文件
-$useDb2 = false;
-$logFile = __DIR__ . '/daemon.log';
-$pidFile = __DIR__ . '/daemon.pid';
+// 处理命令行参数
+$options = getopt('2');
+$useDb2 = isset($options['2']);
+
+// 日志文件和PID文件 - 根据使用的数据库区分
+$logFile = $useDb2 ? __DIR__ . '/daemon_db2.log' : __DIR__ . '/daemon.log';
+$pidFile = $useDb2 ? __DIR__ . '/daemon_db2.pid' : __DIR__ . '/daemon.pid';
 
 /**
  * 写入日志
@@ -102,18 +105,47 @@ function checkNewData(mysqli $conn): int {
 }
 
 /**
+ * 获取车库信息
+ * @param mysqli $conn 数据库连接
+ * @return array ['garage_id' => xxx, 'garage_name' => 'xxx']
+ */
+function getGarageInfo(mysqli $conn): array {
+    $sql = "SELECT garage_id, garage_name FROM p_garage LIMIT 1";
+    $result = $conn->query($sql);
+    if ($result && $row = $result->fetch_assoc()) {
+        return [
+            'garage_id' => $row['garage_id'],
+            'garage_name' => $row['garage_name']
+        ];
+    }
+    return ['garage_id' => 0, 'garage_name' => '未知系统'];
+}
+
+/**
  * 获取关注的车牌列表
  * @param mysqli $conn 数据库连接
+ * @param int|null $garageId 车库ID，NULL表示所有车库
  * @return array
  */
-function getWatchPlates(mysqli $conn): array {
+function getWatchPlates(mysqli $conn, ?int $garageId = null): array {
     $plates = [];
-    $sql = "SELECT plate_number FROM p_watch_plates WHERE is_active = 1";
-    $result = $conn->query($sql);
+    if ($garageId !== null) {
+        $sql = "SELECT plate_number FROM p_watch_plates WHERE is_active = 1 AND (garage_id IS NULL OR garage_id = ?)";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param('i', $garageId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+    } else {
+        $sql = "SELECT plate_number FROM p_watch_plates WHERE is_active = 1";
+        $result = $conn->query($sql);
+    }
     if ($result) {
         while ($row = $result->fetch_assoc()) {
             $plates[] = $row['plate_number'];
         }
+    }
+    if (isset($stmt)) {
+        $stmt->close();
     }
     return $plates;
 }
@@ -121,20 +153,35 @@ function getWatchPlates(mysqli $conn): array {
 /**
  * 获取拉黑的车牌列表（包含拉黑原因）
  * @param mysqli $conn 数据库连接
+ * @param int|null $garageId 车库ID，NULL表示所有车库
  * @return array
  */
-function getBlacklistPlates(mysqli $conn): array {
+function getBlacklistPlates(mysqli $conn, ?int $garageId = null): array {
     $plates = [];
-    $sql = "SELECT plate_number, reason, blacklist_type FROM p_blacklist_plates 
-            WHERE is_active = 1 AND (blacklist_type = 2 OR (blacklist_type = 1 AND end_time > NOW()))";
-    $result = $conn->query($sql);
+    if ($garageId !== null) {
+        $sql = "SELECT plate_number, reason, blacklist_type, garage_id FROM p_blacklist_plates
+                WHERE is_active = 1 AND (blacklist_type = 2 OR (blacklist_type = 1 AND end_time > NOW()))
+                AND (garage_id IS NULL OR garage_id = ?)";
+        $stmt = $conn->prepare($sql);
+        $stmt->bind_param('i', $garageId);
+        $stmt->execute();
+        $result = $stmt->get_result();
+    } else {
+        $sql = "SELECT plate_number, reason, blacklist_type, garage_id FROM p_blacklist_plates
+                WHERE is_active = 1 AND (blacklist_type = 2 OR (blacklist_type = 1 AND end_time > NOW()))";
+        $result = $conn->query($sql);
+    }
     if ($result) {
         while ($row = $result->fetch_assoc()) {
             $plates[$row['plate_number']] = [
                 'reason' => $row['reason'],
-                'type' => $row['blacklist_type'] == 2 ? '永久' : '临时'
+                'type' => $row['blacklist_type'] == 2 ? '永久' : '临时',
+                'garage_id' => $row['garage_id']
             ];
         }
+    }
+    if (isset($stmt)) {
+        $stmt->close();
     }
     return $plates;
 }
@@ -224,17 +271,16 @@ function getRecordsAfterId(mysqli $conn, int $lastId): array {
  * @return array
  */
 function parseRecord(array $record): array {
-    // 确保JSON解码结果为数组，失败时返回空数组
     $realTimeInfo = json_decode($record['real_time_info'] ?? '{}', true);
     if (!is_array($realTimeInfo)) {
         $realTimeInfo = [];
     }
-    
+
     $accessInfo = json_decode($record['access_info'] ?? '{}', true);
     if (!is_array($accessInfo)) {
         $accessInfo = [];
     }
-    
+
     return [
         'id' => $record['id'],
         'licensePlate' => $record['plate_number'] ?? '',
@@ -243,7 +289,9 @@ function parseRecord(array $record): array {
         'direction' => ($record['lane_direction'] ?? 0) == 0 ? '进入' : '离开',
         'carType' => $realTimeInfo['carType'] ?? '',
         'amount' => $accessInfo['fee'] ?? 0,
-        'fullPictureUrl' => $realTimeInfo['fullPictureUrl'] ?? ''
+        'fullPictureUrl' => $realTimeInfo['fullPictureUrl'] ?? '',
+        'garageId' => $accessInfo['garageId'] ?? 0,
+        'parkingName' => $accessInfo['parkingName'] ?? ''
     ];
 }
 
@@ -290,29 +338,32 @@ function incrementNotifyCount(mysqli $conn): bool {
  * 发送拉黑预警通知
  * @param array $record 记录数据
  * @param array $blacklistInfo 拉黑信息
+ * @param string $systemName 系统名称
  * @return array
  */
-function sendBlacklistAlert(array $record, array $blacklistInfo): array {
+function sendBlacklistAlert(array $record, array $blacklistInfo, string $systemName = ''): array {
     $notifySuccess = false;
     $details = [];
-    
-    // 确保输入参数是数组
+
     if (!is_array($record)) {
         return ['success' => false, 'error' => 'record 不是数组'];
     }
     if (!is_array($blacklistInfo)) {
         return ['success' => false, 'error' => 'blacklistInfo 不是数组'];
     }
-    
+
     $licensePlate = $record['licensePlate'] ?? '';
-    
+
     $alertData = [
         'licensePlate' => $licensePlate,
         'timestamp' => $record['timestamp'] ?? '',
         'laneName' => $record['laneName'] ?? '',
         'direction' => $record['direction'] ?? '',
         'reason' => $blacklistInfo['reason'] ?? '',
-        'blacklistType' => $blacklistInfo['type'] ?? ''
+        'blacklistType' => $blacklistInfo['type'] ?? '',
+        'systemName' => $systemName,
+        'garageId' => $record['garageId'] ?? 0,
+        'parkingName' => $record['parkingName'] ?? ''
     ];
     
     // 发送企业微信 Webhook 通知（测试环境或正式环境任一启用即可）
@@ -365,27 +416,30 @@ function sendBlacklistAlert(array $record, array $blacklistInfo): array {
  */
 function mainLoop(bool $useDb2 = false): void {
     global $pidFile;
-    
-    // 写入PID文件
+
     file_put_contents($pidFile, getmypid());
-    
+
     $dbName = $useDb2 ? '第二数据库' : '主数据库';
     writeLog("守护进程启动 (PID: " . getmypid() . ") - 监听{$dbName}");
-    
+
     $conn = $useDb2 ? getDb2Connection() : getDbConnection();
     if (!$conn) {
         writeLog("无法连接数据库，守护进程退出");
         exit(1);
     }
-    
+
+    $garageInfo = getGarageInfo($conn);
+    $garageId = $garageInfo['garage_id'];
+    $garageName = $garageInfo['garage_name'];
+    writeLog("系统信息: garage_id={$garageId}, garage_name={$garageName}");
+
     $lastProcessedId = checkNewData($conn);
     writeLog("初始 last_record_id: {$lastProcessedId}");
-    
-    $watchPlates = getWatchPlates($conn);
-    $blacklistPlates = getBlacklistPlates($conn);
+
+    $watchPlates = getWatchPlates($conn, $garageId);
+    $blacklistPlates = getBlacklistPlates($conn, $garageId);
     writeLog("关注车牌数: " . count($watchPlates) . ", 拉黑车牌数: " . count($blacklistPlates));
-    
-    // 显示当前配置的通知环境
+
     $enabledEnvs = [];
     if (defined('NOTIFY_WECHAT_WORK_WEBHOOK') && NOTIFY_WECHAT_WORK_WEBHOOK) {
         $enabledEnvs[] = '测试环境';
@@ -395,66 +449,57 @@ function mainLoop(bool $useDb2 = false): void {
     }
     $envStr = empty($enabledEnvs) ? '无' : implode('、', $enabledEnvs);
     writeLog("通知目标：{$envStr}");
-    
+
     while (true) {
-        // 检查是否需要退出
         if (!file_exists($pidFile) || file_get_contents($pidFile) != getmypid()) {
             writeLog("收到退出信号，守护进程停止");
             break;
         }
-        
-        // 重新获取关注和拉黑车牌（可能已更新）
-        $watchPlates = getWatchPlates($conn);
-        $blacklistPlates = getBlacklistPlates($conn);
-        
-        // 确保变量类型正确
+
+        $watchPlates = getWatchPlates($conn, $garageId);
+        $blacklistPlates = getBlacklistPlates($conn, $garageId);
+
         if (!is_array($watchPlates)) {
             $watchPlates = [];
         }
         if (!is_array($blacklistPlates)) {
             $blacklistPlates = [];
         }
-        
+
         if (empty($watchPlates) && empty($blacklistPlates)) {
             sleep(POLL_INTERVAL);
             continue;
         }
-        
-        // 检查新数据
+
         $currentLastId = checkNewData($conn);
-        
+
         if ($currentLastId > $lastProcessedId) {
             writeLog("检测到新的车辆抓拍记录 (ID: {$currentLastId})");
-            
-            // 获取新记录
+
             $newRecords = getRecordsAfterId($conn, $lastProcessedId);
-            
-            // 确保 newRecords 是数组
+
             if (!is_array($newRecords)) {
                 $newRecords = [];
             }
-            
+
             foreach ($newRecords as $record) {
-                // 确保 record 是数组
                 if (!is_array($record)) {
                     continue;
                 }
-                
+
                 $parsedRecord = parseRecord($record);
-                
-                // 确保 parsedRecord 是数组
+
                 if (!is_array($parsedRecord)) {
                     continue;
                 }
-                
+
                 $licensePlate = $parsedRecord['licensePlate'] ?? '';
-                
-                // 检查是否是拉黑车牌（优先处理）
+
                 if (!empty($licensePlate) && isset($blacklistPlates[$licensePlate])) {
-                    writeLog("拉黑车牌预警触发: {$licensePlate}");
+                    writeLog("拉黑车牌预警触发: {$licensePlate} [{$garageName}]");
 
                     $blacklistInfo = $blacklistPlates[$licensePlate];
-                    $notifyResult = sendBlacklistAlert($parsedRecord, $blacklistInfo);
+                    $notifyResult = sendBlacklistAlert($parsedRecord, $blacklistInfo, $garageName);
                     $notifySuccess = false;
 
                     if (isset($notifyResult['success']) && $notifyResult['success']) {
@@ -477,19 +522,17 @@ function mainLoop(bool $useDb2 = false): void {
                         writeLog("企业微信拉黑预警发送失败: " . $errorMsg);
                     }
                 }
-                
-                // 检查是否是关注车牌
+
                 if (!empty($licensePlate) && is_array($watchPlates) && in_array($licensePlate, $watchPlates)) {
-                    writeLog("关注车牌提醒触发: {$licensePlate}");
-                    
-                    // 查询车主信息
+                    writeLog("关注车牌提醒触发: {$licensePlate} [{$garageName}]");
+
                     $ownerInfo = getPlateOwnerInfo($conn, $licensePlate);
                     $parsedRecord['ownerName'] = $ownerInfo['name'];
                     $parsedRecord['ownerDepartment'] = $ownerInfo['department'];
-                    
+                    $parsedRecord['systemName'] = $garageName;
+
                     $notifySuccess = false;
-                    
-                    // 发送 Server酱 通知
+
                     if (NOTIFY_SERVERCHAN) {
                         $result = sendServerChanVehicleNotification($parsedRecord);
                         if (is_array($result) && $result['success']) {
@@ -500,8 +543,7 @@ function mainLoop(bool $useDb2 = false): void {
                             writeLog("Server酱通知发送失败: " . $error);
                         }
                     }
-                    
-                    // 发送钉钉通知
+
                     if (NOTIFY_DINGTALK) {
                         $result = sendDingTalkVehicleNotification($parsedRecord);
                         if (is_array($result) && $result['success']) {
@@ -512,8 +554,7 @@ function mainLoop(bool $useDb2 = false): void {
                             writeLog("钉钉通知发送失败: " . $error);
                         }
                     }
-                    
-                    // 发送企业微信 Webhook 通知（测试环境或正式环境任一启用即可）
+
                     if (NOTIFY_WECHAT_WORK_WEBHOOK || NOTIFY_WECHAT_WORK_WEBHOOK_PROD) {
                         $result = sendWeChatWorkWebhookVehicleNotification($parsedRecord);
                         if (is_array($result) && isset($result['success']) && $result['success']) {
@@ -535,28 +576,23 @@ function mainLoop(bool $useDb2 = false): void {
                             writeLog("企业微信通知发送失败: " . $error);
                         }
                     }
-                    
+
                     if ($notifySuccess) {
                         incrementNotifyCount($conn);
                     }
                 }
-                
-                // 更新最后处理ID
+
                 $lastProcessedId = $record['id'] ?? 0;
                 updateLastRecordId($conn, $lastProcessedId);
             }
         }
-        
+
         sleep(POLL_INTERVAL);
     }
-    
+
     $conn->close();
     writeLog("守护进程正常退出");
 }
-
-// 处理命令行参数
-$options = getopt('2');
-$useDb2 = isset($options['2']);
 
 // 检查是否已经在运行
 if (file_exists($pidFile)) {

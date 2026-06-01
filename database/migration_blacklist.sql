@@ -1,12 +1,13 @@
 -- ============================================
--- CarAlert 系统数据库迁移脚本
--- 包含拉黑车牌表和原有表的创建
+-- CarAlert 系统数据库迁移脚本 v2
+-- 支持多车库系统，通过 garage_id 字段区分
 -- ============================================
 
 -- 创建拉黑车牌表
 CREATE TABLE IF NOT EXISTS p_blacklist_plates (
     id INT AUTO_INCREMENT PRIMARY KEY COMMENT '自增ID',
     plate_number VARCHAR(20) NOT NULL COMMENT '被拉黑的车牌号',
+    garage_id BIGINT DEFAULT NULL COMMENT '所属车库ID，NULL表示所有车库',
     reason VARCHAR(500) DEFAULT '' COMMENT '拉黑原因',
     operator VARCHAR(50) DEFAULT '' COMMENT '操作人',
     blacklist_type TINYINT(1) DEFAULT 1 COMMENT '拉黑类型：1-临时拉黑，2-永久拉黑',
@@ -18,13 +19,15 @@ CREATE TABLE IF NOT EXISTS p_blacklist_plates (
     UNIQUE KEY uk_plate_active (plate_number, is_active),
     KEY idx_plate_number (plate_number),
     KEY idx_is_active (is_active),
-    KEY idx_end_time (end_time)
+    KEY idx_end_time (end_time),
+    KEY idx_garage_id (garage_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='拉黑车牌列表';
 
 -- 创建拉黑车牌操作日志表（用于审计）
 CREATE TABLE IF NOT EXISTS p_blacklist_log (
     id INT AUTO_INCREMENT PRIMARY KEY COMMENT '自增ID',
     plate_number VARCHAR(20) NOT NULL COMMENT '车牌号',
+    garage_id BIGINT DEFAULT NULL COMMENT '所属车库ID',
     action_type VARCHAR(20) NOT NULL COMMENT '操作类型：ADD-添加拉黑，REMOVE-解除拉黑，UPDATE-更新信息',
     reason VARCHAR(500) DEFAULT '' COMMENT '原因/备注',
     operator VARCHAR(50) DEFAULT '' COMMENT '操作人',
@@ -33,18 +36,21 @@ CREATE TABLE IF NOT EXISTS p_blacklist_log (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间',
     KEY idx_plate_number (plate_number),
     KEY idx_action_type (action_type),
-    KEY idx_created_at (created_at)
+    KEY idx_created_at (created_at),
+    KEY idx_garage_id (garage_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='拉黑车牌操作日志';
 
 -- 保留原有关注车牌表（兼容旧系统）
 CREATE TABLE IF NOT EXISTS p_watch_plates (
     id INT AUTO_INCREMENT PRIMARY KEY,
     plate_number VARCHAR(20) NOT NULL COMMENT '关注的车牌号',
+    garage_id BIGINT DEFAULT NULL COMMENT '所属车库ID，NULL表示所有车库',
     remark VARCHAR(100) DEFAULT '' COMMENT '备注说明',
     is_active TINYINT(1) DEFAULT 1 COMMENT '是否启用：0-禁用，1-启用',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_plate (plate_number)
+    UNIQUE KEY uk_plate (plate_number),
+    KEY idx_garage_id (garage_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='关注车牌列表';
 
 -- 保留原有更新标记表
@@ -64,6 +70,7 @@ ON DUPLICATE KEY UPDATE id = id;
 CREATE TABLE IF NOT EXISTS p_watch_log (
     id INT AUTO_INCREMENT PRIMARY KEY COMMENT '自增ID',
     plate_number VARCHAR(20) NOT NULL COMMENT '车牌号',
+    garage_id BIGINT DEFAULT NULL COMMENT '所属车库ID',
     action_type VARCHAR(20) NOT NULL COMMENT '操作类型：ADD-添加，ENABLE-启用，DISABLE-禁用，DELETE-删除',
     reason VARCHAR(500) DEFAULT '' COMMENT '原因/备注',
     operator VARCHAR(50) DEFAULT '' COMMENT '操作人',
@@ -72,7 +79,8 @@ CREATE TABLE IF NOT EXISTS p_watch_log (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间',
     KEY idx_plate_number (plate_number),
     KEY idx_action_type (action_type),
-    KEY idx_created_at (created_at)
+    KEY idx_created_at (created_at),
+    KEY idx_garage_id (garage_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='关注车牌操作日志';
 
 -- 初始化关注车牌操作日志（记录当前已存在的关注记录）

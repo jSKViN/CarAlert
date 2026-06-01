@@ -25,6 +25,28 @@ if ($conn) {
 }
 
 DatabaseHelper::closeConnection(1);
+
+$garageList = [];
+$conn1 = DatabaseHelper::getConnection(1);
+if ($conn1) {
+    $result = $conn1->query("SELECT garage_id, garage_name FROM p_garage");
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $garageList[] = $row;
+        }
+    }
+    DatabaseHelper::closeConnection(1);
+}
+$conn2 = DatabaseHelper::getConnection(2);
+if ($conn2) {
+    $result = $conn2->query("SELECT garage_id, garage_name FROM p_garage");
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $garageList[] = $row;
+        }
+    }
+    DatabaseHelper::closeConnection(2);
+}
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -91,6 +113,15 @@ DatabaseHelper::closeConnection(1);
             </div>
 
             <form id="add-form" class="flex flex-col md:flex-row gap-4">
+                <div class="w-48">
+                    <select id="garage-id" name="garage_id"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
+                        <option value="">全部车库</option>
+                        <?php foreach ($garageList as $garage): ?>
+                        <option value="<?php echo htmlspecialchars($garage['garage_id']); ?>"><?php echo htmlspecialchars($garage['garage_name']); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
                 <div class="flex-1">
                     <input type="text" id="plate-number" name="plate_number" placeholder="输入车牌号（如：渝A12345）" required
                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500">
@@ -127,6 +158,12 @@ DatabaseHelper::closeConnection(1);
                         <i class="fa fa-list text-blue-500 mr-2"></i>拉黑列表
                     </h2>
                     <div class="flex items-center space-x-2">
+                        <select id="filter-garage" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">全部车库</option>
+                            <?php foreach ($garageList as $garage): ?>
+                            <option value="<?php echo htmlspecialchars($garage['garage_id']); ?>"><?php echo htmlspecialchars($garage['garage_name']); ?></option>
+                            <?php endforeach; ?>
+                        </select>
                         <input type="text" id="search-input" placeholder="搜索车牌号"
                                class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                         <select id="filter-type" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">

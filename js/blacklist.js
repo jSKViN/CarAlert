@@ -5,7 +5,8 @@ let totalCount = 0;
 let currentFilter = {
     plate_number: '',
     blacklist_type: '',
-    is_active: 1
+    is_active: 1,
+    garage_id: ''
 };
 
 function showToast(message, type = 'success') {
@@ -45,6 +46,7 @@ async function fetchBlacklistPlates() {
     if (currentFilter.plate_number) params.set('plate_number', currentFilter.plate_number);
     if (currentFilter.blacklist_type) params.set('blacklist_type', currentFilter.blacklist_type);
     if (currentFilter.is_active !== '') params.set('is_active', currentFilter.is_active);
+    if (currentFilter.garage_id) params.set('garage_id', currentFilter.garage_id);
 
     try {
         const response = await fetch(`${API_BASE}?${params}`);
@@ -124,6 +126,7 @@ function renderPlateList(plates) {
                             <span class="text-lg font-semibold text-gray-800">${escapeHtml(plate.plate_number)}</span>
                             <span class="px-2 py-1 ${typeClass} rounded-full text-xs">${typeLabel}</span>
                             <span class="px-2 py-1 ${statusClass} rounded-full text-xs">${statusText}</span>
+                            ${plate.data_source ? `<span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs"><i class="fa fa-server mr-1"></i>${escapeHtml(plate.data_source)}</span>` : ''}
                         </div>
                         <div class="text-sm text-gray-500 mt-1">
                             ${plate.reason ? `原因：${escapeHtml(plate.reason)}` : ''}
@@ -174,6 +177,7 @@ function renderLogList(logs) {
                     <span class="font-semibold text-gray-800">${escapeHtml(log.plate_number)}</span>
                     <span class="text-gray-600 ml-2">${actionText}</span>
                     ${log.reason ? `<span class="text-gray-500 ml-2">- ${escapeHtml(log.reason)}</span>` : ''}
+                    ${log.data_source ? `<span class="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs ml-2"><i class="fa fa-server mr-1"></i>${escapeHtml(log.data_source)}</span>` : ''}
                 </div>
                 <div class="text-sm text-gray-500">
                     ${escapeHtml(log.operator)} | ${new Date(log.created_at).toLocaleString('zh-CN')}
@@ -252,12 +256,15 @@ async function removePlate(plateNumber) {
         return;
     }
 
+    const garageId = document.getElementById('filter-garage').value;
+
     try {
         const response = await fetch(`${API_BASE}?action=remove`, {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 plate_number: plateNumber,
+                garage_id: garageId,
                 operator: 'admin'
             })
         });
@@ -372,6 +379,7 @@ document.addEventListener('DOMContentLoaded', function() {
         currentFilter.plate_number = document.getElementById('search-input').value.trim();
         currentFilter.blacklist_type = document.getElementById('filter-type').value;
         currentFilter.is_active = document.getElementById('filter-status').value;
+        currentFilter.garage_id = document.getElementById('filter-garage').value;
         currentPage = 1;
         fetchBlacklistPlates();
     });

@@ -8,104 +8,248 @@ date_default_timezone_set('Asia/Shanghai');
 require_once __DIR__ . '/../daemon/config.php';
 require_once __DIR__ . '/../api/DatabaseHelper.php';
 
-$conn = DatabaseHelper::getConnection(1);
-$conn2 = DatabaseHelper::getConnection(2);
+// 车库ID与数据库的映射
+define('GARAGE_ID_MAP', [
+    '1738360658409357314' => 1,  // 广场停车场 -> 主数据库
+    '1730496648745910274' => 2   // 星光大厦地下停车库 -> 第二数据库
+]);
+
+function getConnectionByGarageId($garageId)
+{
+    $garageId = (string)$garageId;
+    $dbNumber = isset(GARAGE_ID_MAP[$garageId]) ? GARAGE_ID_MAP[$garageId] : 1;
+    return DatabaseHelper::getConnection($dbNumber);
+}
+
 $message = '';
 $error = '';
+
+// 获取车库列表
+$garageList = [];
+$conn1 = DatabaseHelper::getConnection(1);
+if ($conn1) {
+    $result = $conn1->query("SELECT garage_id, garage_name FROM p_garage");
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $garageList[] = $row;
+        }
+    }
+    DatabaseHelper::closeConnection(1);
+}
+$conn2Helper = DatabaseHelper::getConnection(2);
+if ($conn2Helper) {
+    $result = $conn2Helper->query("SELECT garage_id, garage_name FROM p_garage");
+    if ($result) {
+        while ($row = $result->fetch_assoc()) {
+            $garageList[] = $row;
+        }
+    }
+    DatabaseHelper::closeConnection(2);
+}
+
+// 获取当前选中的车库
+$selectedGarageId = $_POST['garage_id'] ?? $_GET['garage_id'] ?? '';
+$conn = getConnectionByGarageId($selectedGarageId);
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     if ($_POST['action'] === 'add' && !empty($_POST['plate_number'])) {
         $plate = trim($_POST['plate_number']);
         $remark = trim($_POST['remark'] ?? '');
-
-        $success1 = false;
-        $success2 = false;
-
-        if ($conn) {
-            $plate_esc = $conn->real_escape_string($plate);
-            $remark_esc = $conn->real_escape_string($remark);
-            $sql = "INSERT INTO p_watch_plates (plate_number, remark) VALUES ('{$plate_esc}', '{$remark_esc}')
-                    ON DUPLICATE KEY UPDATE remark = '{$remark_esc}', is_active = 1";
-            $success1 = $conn->query($sql);
-        }
-
-        if ($conn2) {
-            $plate_esc = $conn2->real_escape_string($plate);
-            $remark_esc = $conn2->real_escape_string($remark);
-            $sql = "INSERT INTO p_watch_plates (plate_number, remark) VALUES ('{$plate_esc}', '{$remark_esc}')
-                    ON DUPLICATE KEY UPDATE remark = '{$remark_esc}', is_active = 1";
-            $success2 = $conn2->query($sql);
-        }
-
-        if ($success1 && $success2) {
-            $message = "添加成功：{$plate}（已同步到两个数据库）";
-        } elseif ($success1) {
-            $message = "添加成功：{$plate}（仅数据库1）";
-        } elseif ($success2) {
-            $message = "添加成功：{$plate}（仅数据库2）";
+        $garageId = $_POST['garage_id'] ?? '';
+        
+        $messages = [];
+        $errors = [];
+        
+        if (empty($garageId)) {
+            $conn1 = DatabaseHelper::getConnection(1);
+            $conn2 = DatabaseHelper::getConnection(2);
+            
+            $success = true;
+            
+            if ($conn1) {
+                $plate_esc = $conn1->real_escape_string($plate);
+                $remark_esc = $conn1->real_escape_string($remark);
+                $sql = "INSERT INTO p_watch_plates (plate_number, remark, garage_id) VALUES ('{$plate_esc}', '{$remark_esc}', '1738360658409357314')
+                        ON DUPLICATE KEY UPDATE remark = '{$remark_esc}', garage_id = '1738360658409357314', is_active = 1";
+                if ($conn1->query($sql)) {
+                    $messages[] = "广场停车场: 成功";
+                } else {
+                    $errors[] = "广场停车场: " . $conn1->error;
+                    $success = false;
+                }
+            }
+            
+            if ($conn2) {
+                $plate_esc = $conn2->real_escape_string($plate);
+                $remark_esc = $conn2->real_escape_string($remark);
+                $sql = "INSERT INTO p_watch_plates (plate_number, remark, garage_id) VALUES ('{$plate_esc}', '{$remark_esc}', '1730496648745910274')
+                        ON DUPLICATE KEY UPDATE remark = '{$remark_esc}', garage_id = '1730496648745910274', is_active = 1";
+                if ($conn2->query($sql)) {
+                    $messages[] = "地下车库: 成功";
+                } else {
+                    $errors[] = "地下车库: " . $conn2->error;
+                    $success = false;
+                }
+            }
+            
+            if ($success) {
+                $message = "已添加到两个系统: {$plate}";
+            } else {
+                $error = "部分失败: " . implode('; ', $errors);
+            }
         } else {
-            $error = "添加失败";
+            $conn = getConnectionByGarageId($garageId);
+            if ($conn) {
+                $plate_esc = $conn->real_escape_string($plate);
+                $remark_esc = $conn->real_escape_string($remark);
+                $garageId_esc = $conn->real_escape_string($garageId);
+                
+                $sql = "INSERT INTO p_watch_plates (plate_number, remark, garage_id) VALUES ('{$plate_esc}', '{$remark_esc}', '{$garageId_esc}')
+                        ON DUPLICATE KEY UPDATE remark = '{$remark_esc}', garage_id = '{$garageId_esc}', is_active = 1";
+                $success = $conn->query($sql);
+                
+                if ($success) {
+                    $message = "添加成功：{$plate}";
+                } else {
+                    $error = "添加失败：" . $conn->error;
+                }
+            }
         }
     }
 
     if ($_POST['action'] === 'delete' && !empty($_POST['plate_number'])) {
         $plate = trim($_POST['plate_number']);
+        $garageId = $_POST['garage_id'] ?? '';
 
-        $success1 = false;
-        $success2 = false;
-
-        if ($conn) {
-            $plate_esc = $conn->real_escape_string($plate);
-            $success1 = $conn->query("DELETE FROM p_watch_plates WHERE plate_number = '{$plate_esc}'");
-        }
-
-        if ($conn2) {
-            $plate_esc = $conn2->real_escape_string($plate);
-            $success2 = $conn2->query("DELETE FROM p_watch_plates WHERE plate_number = '{$plate_esc}'");
-        }
-
-        if ($success1 && $success2) {
-            $message = "删除成功（已同步到两个数据库）";
-        } elseif ($success1 || $success2) {
-            $message = "删除成功";
+        if (empty($garageId)) {
+            $conn1 = DatabaseHelper::getConnection(1);
+            $conn2 = DatabaseHelper::getConnection(2);
+            
+            $success = true;
+            if ($conn1) {
+                $plate_esc = $conn1->real_escape_string($plate);
+                $sql = "DELETE FROM p_watch_plates WHERE plate_number = '{$plate_esc}'";
+                if (!$conn1->query($sql)) $success = false;
+            }
+            if ($conn2) {
+                $plate_esc = $conn2->real_escape_string($plate);
+                $sql = "DELETE FROM p_watch_plates WHERE plate_number = '{$plate_esc}'";
+                if (!$conn2->query($sql)) $success = false;
+            }
+            
+            if ($success) {
+                $message = "已从两个系统删除";
+            } else {
+                $error = "部分删除失败";
+            }
         } else {
-            $error = "删除失败";
+            $conn = getConnectionByGarageId($garageId);
+            if ($conn) {
+                $plate_esc = $conn->real_escape_string($plate);
+                $garageId_esc = $conn->real_escape_string($garageId);
+                
+                $sql = "DELETE FROM p_watch_plates WHERE plate_number = '{$plate_esc}' AND (garage_id IS NULL OR garage_id = '{$garageId_esc}')";
+                $success = $conn->query($sql);
+                
+                if ($success) {
+                    $message = "删除成功";
+                } else {
+                    $error = "删除失败";
+                }
+            }
         }
     }
 
     if ($_POST['action'] === 'toggle' && !empty($_POST['plate_number'])) {
         $plate = trim($_POST['plate_number']);
         $newStatus = intval($_POST['new_status']);
+        $garageId = $_POST['garage_id'] ?? '';
 
-        $success1 = false;
-        $success2 = false;
-
-        if ($conn) {
-            $plate_esc = $conn->real_escape_string($plate);
-            $success1 = $conn->query("UPDATE p_watch_plates SET is_active = {$newStatus} WHERE plate_number = '{$plate_esc}'");
-        }
-
-        if ($conn2) {
-            $plate_esc = $conn2->real_escape_string($plate);
-            $success2 = $conn2->query("UPDATE p_watch_plates SET is_active = {$newStatus} WHERE plate_number = '{$plate_esc}'");
-        }
-
-        if ($success1 && $success2) {
-            $message = "状态更新成功（已同步到两个数据库）";
-        } elseif ($success1 || $success2) {
-            $message = "状态更新成功";
+        if (empty($garageId)) {
+            $conn1 = DatabaseHelper::getConnection(1);
+            $conn2 = DatabaseHelper::getConnection(2);
+            
+            $success = true;
+            if ($conn1) {
+                $plate_esc = $conn1->real_escape_string($plate);
+                $sql = "UPDATE p_watch_plates SET is_active = {$newStatus} WHERE plate_number = '{$plate_esc}'";
+                if (!$conn1->query($sql)) $success = false;
+            }
+            if ($conn2) {
+                $plate_esc = $conn2->real_escape_string($plate);
+                $sql = "UPDATE p_watch_plates SET is_active = {$newStatus} WHERE plate_number = '{$plate_esc}'";
+                if (!$conn2->query($sql)) $success = false;
+            }
+            
+            if ($success) {
+                $message = "两个系统状态已更新";
+            } else {
+                $error = "部分更新失败";
+            }
         } else {
-            $error = "状态更新失败";
+            $conn = getConnectionByGarageId($garageId);
+            if ($conn) {
+                $plate_esc = $conn->real_escape_string($plate);
+                $garageId_esc = $conn->real_escape_string($garageId);
+                
+                $sql = "UPDATE p_watch_plates SET is_active = {$newStatus} WHERE plate_number = '{$plate_esc}' AND (garage_id IS NULL OR garage_id = '{$garageId_esc}')";
+                $success = $conn->query($sql);
+                
+                if ($success) {
+                    $message = "状态更新成功";
+                } else {
+                    $error = "状态更新失败";
+                }
+            }
         }
     }
 }
 
+// 获取关注车牌列表
 $watchPlates = [];
-if ($conn) {
-    $result = $conn->query("SELECT * FROM p_watch_plates ORDER BY created_at DESC");
-    if ($result) {
-        while ($row = $result->fetch_assoc()) {
-            $watchPlates[] = $row;
+if (empty($selectedGarageId)) {
+    $conn1 = DatabaseHelper::getConnection(1);
+    $conn2 = DatabaseHelper::getConnection(2);
+    
+    if ($conn1) {
+        $result = $conn1->query("SELECT * FROM p_watch_plates ORDER BY created_at DESC");
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $row['data_source'] = '广场停车场';
+                $watchPlates[] = $row;
+            }
+        }
+    }
+    if ($conn2) {
+        $result = $conn2->query("SELECT * FROM p_watch_plates ORDER BY created_at DESC");
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                $row['data_source'] = '星光大厦地下停车库';
+                $watchPlates[] = $row;
+            }
+        }
+    }
+    
+    usort($watchPlates, function($a, $b) {
+        return strcmp($b['created_at'] ?? '', $a['created_at'] ?? '');
+    });
+} else {
+    $conn = getConnectionByGarageId($selectedGarageId);
+    if ($conn) {
+        $garageId_esc = $conn->real_escape_string($selectedGarageId);
+        $where = " WHERE garage_id IS NULL OR garage_id = '{$garageId_esc}'";
+        
+        $sql = "SELECT * FROM p_watch_plates {$where} ORDER BY created_at DESC";
+        $result = $conn->query($sql);
+        if ($result) {
+            while ($row = $result->fetch_assoc()) {
+                if ($selectedGarageId == '1738360658409357314') {
+                    $row['data_source'] = '广场停车场';
+                } elseif ($selectedGarageId == '1730496648745910274') {
+                    $row['data_source'] = '星光大厦地下停车库';
+                }
+                $watchPlates[] = $row;
+            }
         }
     }
 }
@@ -126,8 +270,20 @@ foreach ($watchPlates as $plate) {
     }
 }
 
+// 获取当前车库名称
+$currentGarageName = '';
+foreach ($garageList as $g) {
+    if ($g['garage_id'] == $selectedGarageId) {
+        $currentGarageName = $g['garage_name'];
+        break;
+    }
+}
+if (empty($currentGarageName) && !empty($selectedGarageId)) {
+    $currentGarageName = '全部车库';
+}
+
 if ($conn) DatabaseHelper::closeConnection(1);
-if ($conn2) DatabaseHelper::closeConnection(2);
+if (isset($conn2)) DatabaseHelper::closeConnection(2);
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -155,7 +311,12 @@ if ($conn2) DatabaseHelper::closeConnection(2);
 
     <main class="container mx-auto px-4 py-6 max-w-4xl">
         <div class="mb-6">
-            <p class="text-gray-600">当关注的车牌被抓拍时，将自动发送微信通知（同步到两个数据库）</p>
+            <p class="text-gray-600">当关注的车牌被抓拍时，将自动发送微信通知</p>
+            <?php if (!empty($currentGarageName)): ?>
+            <p class="text-blue-600 font-semibold mt-2">
+                <i class="fa fa-map-marker mr-1"></i>当前车库：<?php echo htmlspecialchars($currentGarageName); ?>
+            </p>
+            <?php endif; ?>
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -191,6 +352,17 @@ if ($conn2) DatabaseHelper::closeConnection(2);
             </h2>
             <form method="POST" class="flex flex-col md:flex-row gap-4">
                 <input type="hidden" name="action" value="add">
+                <div class="w-48">
+                    <select name="garage_id" id="add-garage-id"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">选择车库</option>
+                        <?php foreach ($garageList as $garage): ?>
+                        <option value="<?php echo htmlspecialchars($garage['garage_id']); ?>" <?php echo $garage['garage_id'] == $selectedGarageId ? 'selected' : ''; ?>>
+                            <?php echo htmlspecialchars($garage['garage_name']); ?>
+                        </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
                 <div class="flex-1">
                     <input type="text" name="plate_number" placeholder="输入车牌号（如：渝A12345）" required
                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -207,9 +379,21 @@ if ($conn2) DatabaseHelper::closeConnection(2);
 
         <div class="bg-white rounded-lg shadow overflow-hidden">
             <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-lg font-semibold text-gray-700">
-                    <i class="fa fa-list text-blue-500 mr-2"></i>关注列表
-                </h2>
+                <div class="flex justify-between items-center">
+                    <h2 class="text-lg font-semibold text-gray-700">
+                        <i class="fa fa-list text-blue-500 mr-2"></i>关注列表
+                    </h2>
+                    <div class="flex items-center space-x-2">
+                        <select id="filter-garage" class="px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                            <option value="">全部车库</option>
+                            <?php foreach ($garageList as $garage): ?>
+                            <option value="<?php echo htmlspecialchars($garage['garage_id']); ?>" <?php echo $garage['garage_id'] == $selectedGarageId ? 'selected' : ''; ?>>
+                                <?php echo htmlspecialchars($garage['garage_name']); ?>
+                            </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                </div>
             </div>
 
             <?php if (empty($watchPlates)): ?>
@@ -253,16 +437,18 @@ if ($conn2) DatabaseHelper::closeConnection(2);
                                 <input type="hidden" name="action" value="toggle">
                                 <input type="hidden" name="plate_number" value="<?php echo htmlspecialchars($plate['plate_number']); ?>">
                                 <input type="hidden" name="new_status" value="<?php echo $plate['is_active'] ? 0 : 1; ?>">
+                                <input type="hidden" name="garage_id" value="<?php echo htmlspecialchars($selectedGarageId); ?>">
                                 <button type="submit" class="text-blue-600 hover:text-blue-800 mr-3">
                                     <i class="fa fa-<?php echo $plate['is_active'] ? 'pause' : 'play'; ?>"></i>
                                     <?php echo $plate['is_active'] ? '禁用' : '启用'; ?>
                                 </button>
                             </form>
-                            <form method="POST" class="inline" onsubmit="return confirm('确定删除吗？');">
+                            <form method="POST" class="inline">
                                 <input type="hidden" name="action" value="delete">
                                 <input type="hidden" name="plate_number" value="<?php echo htmlspecialchars($plate['plate_number']); ?>">
-                                <button type="submit" class="text-red-600 hover:text-red-800">
-                                    <i class="fa fa-trash"></i> 删除
+                                <input type="hidden" name="garage_id" value="<?php echo htmlspecialchars($selectedGarageId); ?>">
+                                <button type="submit" class="text-red-600 hover:text-red-800" onclick="return confirm('确定要删除这个车牌吗？')">
+                                    <i class="fa fa-trash"></i>删除
                                 </button>
                             </form>
                         </td>
@@ -272,12 +458,17 @@ if ($conn2) DatabaseHelper::closeConnection(2);
             </table>
             <?php endif; ?>
         </div>
-
-        <div class="mt-6 text-center">
-            <a href="index.php" class="text-blue-600 hover:text-blue-800">
-                <i class="fa fa-arrow-left mr-1"></i>返回首页
-            </a>
-        </div>
     </main>
+
+    <script>
+        document.getElementById('filter-garage').addEventListener('change', function() {
+            const garageId = this.value;
+            let url = window.location.pathname;
+            if (garageId) {
+                url += '?garage_id=' + encodeURIComponent(garageId);
+            }
+            window.location.href = url;
+        });
+    </script>
 </body>
 </html>
