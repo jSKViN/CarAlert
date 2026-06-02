@@ -82,6 +82,22 @@ cd d:\xampp\htdocs\CarAlert\daemon
 uninstall_task_garage.bat
 ```
 
+### 4. 停止并清理守护进程
+
+用于停止运行中的守护进程并删除日志和PID文件。
+
+**广场停车场：**
+```cmd
+cd d:\xampp\htdocs\CarAlert\daemon
+clean_daemon_plaza.bat
+```
+
+**地下车库：**
+```cmd
+cd d:\xampp\htdocs\CarAlert\daemon
+clean_daemon_garage.bat
+```
+
 ## 任务计划程序中的任务名称
 
 | 任务名称 | 对应系统 |
