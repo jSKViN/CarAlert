@@ -1,0 +1,32 @@
+# 禁止访问敏感文件
+<FilesMatch "^config\.php$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# 禁止访问整个 docs 目录
+RedirectMatch 403 ^/docs/
+
+# 禁止访问 daemon 目录下的配置文件
+<FilesMatch "^(config|config\.template|env_loader)\.php$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# 禁止访问 .git、.gitignore 等隐藏文件
+<FilesMatch "^\.">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# 禁止访问 .md 文档文件（可选，根据需要）
+<FilesMatch "\.md$">
+    Order allow,deny
+    Deny from all
+</FilesMatch>
+
+# 可选：为整个目录添加密码保护（如果需要）
+# AuthType Basic
+# AuthName "Restricted Area"
+# AuthUserFile "D:/xampp/htdocs/CarAlert/.htpasswd"
+# Require valid-user

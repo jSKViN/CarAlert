@@ -1,7 +1,7 @@
 @echo off
 chcp 65001 >nul
 echo ==============================================
-echo      CarAlert Vehicle Monitor Daemon
+echo   CarAlert 地下车库守护进程
 echo ==============================================
 echo.
 
@@ -17,13 +17,13 @@ if %errorlevel% neq 0 (
 cd /d "%~dp0"
 
 :: Start daemon
-echo Starting daemon...
-echo Log file: daemon.log
-echo PID file: daemon.pid
+echo Starting Garage Parking Daemon...
+echo Log file: daemon_db2.log
+echo PID file: daemon_db2.pid
 echo.
 echo Press Ctrl+C to stop daemon
 echo.
 
-php notify_daemon.php
+php notify_daemon.php -2
 
 pause

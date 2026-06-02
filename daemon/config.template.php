@@ -6,14 +6,14 @@
  * config.php 已被 .gitignore 忽略，不会被提交
  */
 
-// 主数据库配置
+// 广场停车场数据库配置
 define('DB_HOST', 'localhost');
 define('DB_PORT', 3306);
 define('DB_USER', 'your_username');
 define('DB_PASS', 'your_password');
 define('DB_NAME', 'your_database');
 
-// 备用数据库配置（可选）
+// 地下车库数据库配置
 define('DB2_HOST', 'localhost');
 define('DB2_PORT', 3306);
 define('DB2_USER', 'your_username');

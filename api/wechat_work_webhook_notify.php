@@ -78,12 +78,17 @@ function sendVehicleNotification($record)
     $directionText = $record['direction'] === 'IN' || $record['direction'] === '进入' ? '入口抓拍' : '出口抓拍';
     $time = date('Y-m-d H:i:s', strtotime($record['timestamp']));
 
-    $title = "🚗 车辆{$directionText} - {$record['licensePlate']}";
+    $systemPrefix = !empty($record['systemName']) ? "【{$record['systemName']}】" : "";
+    $title = "🚗 {$systemPrefix}车辆{$directionText} - {$record['licensePlate']}";
 
     $content = "车牌号：{$record['licensePlate']}\n";
     $content .= "抓拍类型：{$directionText}\n";
     $content .= "时间：{$time}\n";
     $content .= "车道：{$record['laneName']}\n";
+
+    if (!empty($record['systemName'])) {
+        $content .= "系统：{$record['systemName']}\n";
+    }
 
     if (!empty($record['ownerName'])) {
         $content .= "姓名：{$record['ownerName']}\n";
@@ -106,7 +111,8 @@ function sendWeChatWorkWebhookBlacklistAlert($alertData)
     $directionText = $alertData['direction'] === 'IN' || $alertData['direction'] === '进入' ? '进入' : '离开';
     $time = date('Y-m-d H:i:s', strtotime($alertData['timestamp']));
 
-    $title = "⛔ 拉黑车牌预警 - {$alertData['licensePlate']}";
+    $systemPrefix = !empty($alertData['systemName']) ? "【{$alertData['systemName']}】" : "";
+    $title = "⛔ {$systemPrefix}拉黑车牌预警 - {$alertData['licensePlate']}";
 
     $content = "⚠️ 警告：发现拉黑车辆{$directionText}\n";
     $content .= "车牌号：{$alertData['licensePlate']}\n";
@@ -115,6 +121,14 @@ function sendWeChatWorkWebhookBlacklistAlert($alertData)
     $content .= "抓拍时间：{$time}\n";
     $content .= "车道：{$alertData['laneName']}\n";
     $content .= "方向：{$directionText}\n";
+
+    if (!empty($alertData['systemName'])) {
+        $content .= "系统：{$alertData['systemName']}\n";
+    }
+
+    if (!empty($alertData['parkingName'])) {
+        $content .= "停车场：{$alertData['parkingName']}\n";
+    }
 
     return sendWechatWorkWebhookMessage($title, $content);
 }

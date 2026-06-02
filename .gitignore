@@ -1,5 +1,6 @@
 # 日志文件
 *.log
+logs/
 
 # PID文件
 *.pid
@@ -12,10 +13,25 @@ daemon/config.php
 .env
 .env.dev
 .env.local
+.env.production
+
+# PHP编译/缓存文件
+*.php.cache
+.phpunit.result.cache
 
 # 测试文件
 tests/
 *.test.php
+test_*.php
+check_*.php
+check_*.txt
+*_result.txt
+*_output.txt
+verify_*.php
+cleanup.php
+cleanup_*.php
+run_migration.php
+migrate_*.php
 
 # 编辑器配置
 .vscode/
@@ -24,15 +40,22 @@ tests/
 *.swo
 *~
 *.code-workspace
+*.sublime-workspace
 
 # OS文件
 .DS_Store
 Thumbs.db
+desktop.ini
 
 # 临时文件
 tmp/
 temp/
 cache/
+*.tmp
+*.bak
+*.backup
+*.old
+*.orig
 
 # Composer
 vendor/
@@ -41,12 +64,38 @@ composer.lock
 # Node.js
 node_modules/
 package-lock.json
+yarn.lock
+.npm/
+.yarn/
 
 # 备份文件
 *.bak
 *.backup
 *.old
+*.swp
+*.swo
+*~
+*.tar
+*.tar.gz
+*.zip
+*.rar
+
+# IDE临时文件
+*.iml
+*.ipr
+*.iws
 
 # Web服务器日志
 access.log
 error.log
+nginx.log
+apache.log
+
+# 数据库文件（不应提交）
+*.db
+*.sqlite
+*.sqlite3
+
+# 守护进程输出文件
+daemon/output/
+daemon/runtime/

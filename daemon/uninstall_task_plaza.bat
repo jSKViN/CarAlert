@@ -1,21 +1,21 @@
 @echo off
 chcp 65001 >nul
 echo ==============================================
-echo     CarAlert Daemon - Auto Start Uninstall
+echo   CarAlert 广场停车场守护进程 - 开机自启卸载
 echo ==============================================
 echo.
 
-echo Deleting Windows Task Scheduler task...
+echo Deleting Windows Task Scheduler task for Plaza...
 echo.
 
 :: Delete existing task
-schtasks /delete /tn "CarAlert_Daemon" /f
+schtasks /delete /tn "CarAlert_Daemon_Plaza" /f
 
 if %errorlevel% equ 0 (
     echo.
-    echo SUCCESS: Task deleted!
+    echo SUCCESS: Plaza task deleted!
     echo.
-    echo The daemon will no longer start automatically on system boot.
+    echo The Plaza daemon will no longer start automatically on system boot.
     echo.
 ) else (
     echo.
